@@ -48,10 +48,10 @@ app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.originalUrl} not found` });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 MHTCET College Predictor Backend`);
-  console.log(`   Server running on http://localhost:${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
+  console.log(`   Server running on http://192.168.1.8:${PORT}`);
+  console.log(`   Health check: http://192.168.1.8:${PORT}/api/health\n`);
 });
 
 module.exports = app;
