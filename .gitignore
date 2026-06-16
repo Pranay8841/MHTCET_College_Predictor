@@ -1,0 +1,17 @@
+# PDF Cutoff Files (Sensitive/Large)
+2024ENGG_CAP1_CutOff.pdf
+2024ENGG_CAP2_CutOff.pdf
+*.pdf
+
+# Backend
+backend/node_modules/
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/.env
+frontend/dist/
+
+# OS/System files
+.DS_Store
+Thumbs.db
