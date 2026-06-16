@@ -1190,3 +1190,133 @@ img {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/* ---------- Mobile Responsiveness Overrides ---------- */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: var(--text-3xl);
+  }
+}
+
+@media (max-width: 576px) {
+  /* Navbar */
+  .navbar {
+    padding: var(--space-3) 0;
+  }
+  .navbar .container {
+    flex-direction: column;
+    gap: var(--space-3);
+    align-items: center;
+  }
+  .navbar-nav {
+    width: 100%;
+    justify-content: space-evenly;
+    gap: var(--space-1);
+  }
+  .navbar-nav a {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  /* Hero Section */
+  .hero {
+    padding: var(--space-12) 0 var(--space-6);
+  }
+  .hero-badge {
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+  .hero-title {
+    font-size: var(--text-2xl) !important;
+    line-height: 1.2;
+    margin-bottom: var(--space-4);
+  }
+  .hero-subtitle {
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-6);
+    padding: 0 var(--space-2);
+  }
+
+  /* Predictor & Admin Cards */
+  .predictor-form-card,
+  .card {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+  }
+  .predictor-form-card h2 {
+    font-size: var(--text-xl) !important;
+    margin-bottom: var(--space-6) !important;
+  }
+
+  /* Form Elements */
+  .radio-group {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .radio-option label {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Filter Bar */
+  .filter-bar {
+    flex-direction: column;
+    gap: var(--space-2) !important;
+    padding: var(--space-3);
+  }
+  .filter-bar .form-select,
+  .filter-bar .form-input {
+    width: 100%;
+    min-width: 100% !important;
+  }
+
+  /* Stats Bar */
+  .stats-bar {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+  .stat-card {
+    padding: var(--space-3);
+  }
+  .stat-value {
+    font-size: var(--text-xl);
+  }
+  .stat-label {
+    font-size: var(--text-xs);
+  }
+
+  /* Results Grid & Cards */
+  .results-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-3);
+  }
+  .college-card {
+    padding: var(--space-4);
+  }
+  .college-name {
+    font-size: var(--text-sm);
+  }
+  .college-cutoff-row {
+    gap: var(--space-1);
+    padding-top: var(--space-2);
+  }
+  .cutoff-value {
+    font-size: var(--text-sm);
+  }
+
+  /* Buttons */
+  .btn-lg {
+    padding: var(--space-3) var(--space-6);
+    font-size: var(--text-base);
+  }
+  
+  /* Upload Area */
+  .upload-zone {
+    padding: var(--space-6);
+  }
+  .upload-zone-icon {
+    font-size: 2rem;
+  }
+}
+
