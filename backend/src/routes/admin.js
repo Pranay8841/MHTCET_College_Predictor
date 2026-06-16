@@ -8,8 +8,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { parseCutoffPDF } = require('../services/pdfParser');
-const { saveCutoffsToFirestore } = require('../services/firestoreService');
-const { db } = require('../firebaseAdmin');
+const { saveCutoffsToSupabase } = require('../services/supabaseService');
+const { supabase } = require('../supabaseClient');
 
 // Multer config — memory storage, 50MB limit for large PDFs
 const upload = multer({
@@ -73,19 +73,18 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
       console.warn('⚠️  Cloudinary upload skipped:', err.message);
     }
 
-    // 2. Create metadata doc in Firestore
-    if (db) {
-      await db.collection('metadata').doc('rounds').set({
-        [roundId]: {
-          roundName,
-          year,
-          uploadedAt: new Date(),
-          cloudinaryUrl: cloudinaryUrl || '',
-          status: 'processing',
-          totalColleges: 0,
-          totalBranches: 0
-        }
-      }, { merge: true });
+    // 2. Create metadata doc in Supabase
+    if (supabase) {
+      await supabase.from('rounds_metadata').upsert({
+        round_id: roundId,
+        round_name: roundName,
+        year,
+        uploaded_at: new Date().toISOString(),
+        cloudinary_url: cloudinaryUrl || '',
+        status: 'processing',
+        total_colleges: 0,
+        total_branches: 0
+      });
     }
 
     // 3. Send immediate response (parsing happens async below)
@@ -103,22 +102,23 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
     console.log(`   Parsing completed in ${((Date.now() - parseStart) / 1000).toFixed(1)}s`);
     console.log(`   Found ${parsedData.length} branch entries`);
 
-    // 5. Save to Firestore in batches
-    if (db) {
-      console.log(`\n💾 Saving to Firestore...`);
+    // 5. Save to Supabase in batches
+    if (supabase) {
+      console.log(`\n💾 Saving to Supabase...`);
       const saveStart = Date.now();
-      const { totalColleges, totalBranches } = await saveCutoffsToFirestore(parsedData, roundId, year);
-      console.log(`   Firestore save completed in ${((Date.now() - saveStart) / 1000).toFixed(1)}s`);
+      const { totalColleges, totalBranches } = await saveCutoffsToSupabase(parsedData, roundId, year);
+      console.log(`   Supabase save completed in ${((Date.now() - saveStart) / 1000).toFixed(1)}s`);
 
       // 6. Update metadata with final counts
-      await db.collection('metadata').doc('rounds').set({
-        [roundId]: {
-          status: 'ready',
-          totalColleges,
-          totalBranches,
-          processedAt: new Date()
-        }
-      }, { merge: true });
+      await supabase.from('rounds_metadata').upsert({
+        round_id: roundId,
+        round_name: roundName,
+        year,
+        status: 'ready',
+        total_colleges: totalColleges,
+        total_branches: totalBranches,
+        processed_at: new Date().toISOString()
+      });
 
       // Clear memory cache for this round to ensure new data is loaded
       if (global.cutoffCache) {
@@ -129,7 +129,7 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
       console.log(`\n✅ Upload complete: ${totalColleges} colleges, ${totalBranches} branches`);
       console.log(`   Total time: ${((Date.now() - startTime) / 1000).toFixed(1)}s\n`);
     } else {
-      console.log('⚠️  Firestore not available. Parsed data not saved.');
+      console.log('⚠️  Supabase not available. Parsed data not saved.');
       console.log('   First 3 entries:', JSON.stringify(parsedData.slice(0, 3), null, 2));
     }
 
@@ -138,11 +138,15 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
 
     // Update status to error if possible
     try {
-      if (db && req.body?.roundName && req.body?.year) {
+      if (supabase && req.body?.roundName && req.body?.year) {
         const roundId = `${req.body.year}_${req.body.roundName.replace(/\s+/g, '_')}`;
-        await db.collection('metadata').doc('rounds').set({
-          [roundId]: { status: 'error', error: err.message }
-        }, { merge: true });
+        await supabase.from('rounds_metadata').upsert({
+          round_id: roundId,
+          round_name: req.body.roundName,
+          year: req.body.year,
+          status: 'error',
+          error: err.message
+        });
       }
     } catch (e) { /* ignore */ }
 
@@ -159,11 +163,29 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
  */
 router.get('/rounds', async (req, res) => {
   try {
-    if (!db) {
+    if (!supabase) {
       return res.json({});
     }
-    const doc = await db.collection('metadata').doc('rounds').get();
-    res.json(doc.exists ? doc.data() : {});
+    const { data, error } = await supabase
+      .from('rounds_metadata')
+      .select('*');
+    if (error) throw error;
+
+    const formatted = {};
+    data.forEach(r => {
+      formatted[r.round_id] = {
+        roundName: r.round_name,
+        year: r.year,
+        uploadedAt: r.uploaded_at,
+        cloudinaryUrl: r.cloudinary_url,
+        status: r.status,
+        totalColleges: r.total_colleges,
+        totalBranches: r.total_branches,
+        processedAt: r.processed_at,
+        error: r.error
+      };
+    });
+    res.json(formatted);
   } catch (err) {
     console.error('❌ Error fetching rounds:', err);
     res.status(500).json({ error: err.message });

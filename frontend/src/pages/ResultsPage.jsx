@@ -155,8 +155,8 @@ function ResultsPage() {
       // Table data
       const tableData = filteredPredictions.map(p => [
         p.collegeCode,
-        p.collegeName.substring(0, 40),
-        p.branchName.substring(0, 30),
+        p.collegeName,
+        p.branchName,
         p.collegeType || 'N/A',
         p.category,
         p.cutoffPercentile?.toFixed(2) || 'N/A',

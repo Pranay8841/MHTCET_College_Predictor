@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { db } = require('../firebaseAdmin');
+const { supabase } = require('../supabaseClient');
 const { buildCategoryCodes } = require('../utils/categoryDecoder');
 
 /**
@@ -49,82 +49,84 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'percentile must be a number between 0 and 100' });
     }
 
-    if (!db) {
-      return res.status(503).json({ error: 'Database not available. Check Firebase configuration.' });
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not available. Check Supabase configuration.' });
     }
 
     // Build target category codes to check
     const categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
 
-    // Load cutoff data (from memory cache or Firestore query)
-    let dataList = [];
-    if (global.cutoffCache && global.cutoffCache[roundId]) {
-      dataList = global.cutoffCache[roundId];
-    } else {
-      console.log(`📡 Cache miss. Fetching Round "${roundId}" cutoffs from Firestore...`);
-      const snapshot = await db.collection('cutoffs').where('roundId', '==', roundId).get();
-      snapshot.forEach(doc => dataList.push(doc.data()));
-      
-      if (!global.cutoffCache) global.cutoffCache = {};
-      global.cutoffCache[roundId] = dataList;
-      console.log(`💾 Memory cache populated: ${dataList.length} entries for "${roundId}"`);
+    // 1. Build the base Supabase query
+    // Use !inner joins to enforce that we only return results when college and branch associations exist
+    let selectString = `
+      id,
+      round_id,
+      year,
+      seat_block_type,
+      category_code,
+      stage1_merit_no,
+      stage1_percentile,
+      stage2_merit_no,
+      stage2_percentile,
+      colleges!inner(college_code, college_name, college_type, home_university),
+      branches!inner(branch_code, branch_name)
+    `;
+
+    let query = supabase
+      .from('cutoffs')
+      .select(selectString)
+      .eq('round_id', roundId)
+      .in('category_code', categoryCodes)
+      .lte('stage1_percentile', pct + 2.0) // Database-side filtering for High/Medium/Low chance (Margin >= -2.0)
+      .not('stage1_percentile', 'is', null);
+
+    // Filter by branch name in SQL if specified
+    if (branch && branch !== 'all') {
+      query = query.eq('branches.branch_name', branch);
     }
 
-    // Filter by branch in memory
-    let filteredData = dataList;
-    if (branch && branch !== 'all') {
-      filteredData = dataList.filter(d => d.branchName === branch);
+    // Filter by college type in SQL if specified
+    if (collegeType && collegeType !== 'all') {
+      query = query.ilike('colleges.college_type', `%${collegeType}%`);
+    }
+
+    const { data: dbRows, error: dbError } = await query;
+
+    if (dbError) {
+      throw dbError;
     }
 
     const predictions = [];
 
-    filteredData.forEach(data => {
-      // Apply college type filter
-      if (collegeType && collegeType !== 'all') {
-        if (!data.collegeType.toLowerCase().includes(collegeType.toLowerCase())) {
-          return;
-        }
-      }
+    // 2. Map results and calculate admission chances
+    dbRows.forEach(row => {
+      // Filter seat blocks by seat type
+      const blockMatchesSeatType = matchesSeatType(row.seat_block_type, seatType);
+      if (!blockMatchesSeatType) return;
 
-      // Check each seat block
-      data.seatBlocks.forEach(block => {
-        // Filter seat blocks by seat type
-        const blockMatchesSeatType = matchesSeatType(block.seatBlockType, seatType);
-        if (!blockMatchesSeatType) return;
+      const cutoffPct = parseFloat(row.stage1_percentile);
+      const chance = calculateChance(pct, cutoffPct);
 
-        // Check each category code the student is eligible for
-        categoryCodes.forEach(catCode => {
-          const catData = block.categories[catCode];
-          if (!catData) return;
-
-          const cutoffPct = catData.stage1Percentile;
-          if (cutoffPct === null || cutoffPct === undefined) return;
-
-          // Calculate admission chance
-          const chance = calculateChance(pct, cutoffPct);
-
-          if (chance > 0) {
-            predictions.push({
-              collegeCode: data.collegeCode,
-              collegeName: data.collegeName,
-              collegeType: data.collegeType,
-              homeUniversity: data.homeUniversity,
-              branchCode: data.branchCode,
-              branchName: data.branchName,
-              seatBlockType: block.seatBlockType,
-              category: catCode,
-              cutoffPercentile: cutoffPct,
-              cutoffMeritNo: catData.stage1MeritNo,
-              stage2Percentile: catData.stage2Percentile,
-              stage2MeritNo: catData.stage2MeritNo,
-              studentPercentile: pct,
-              percentileDiff: parseFloat((pct - cutoffPct).toFixed(7)),
-              chance,
-              chanceLabel: getChanceLabel(chance)
-            });
-          }
+      if (chance > 0) {
+        predictions.push({
+          collegeCode: row.colleges.college_code,
+          collegeName: row.colleges.college_name,
+          collegeType: row.colleges.college_type,
+          homeUniversity: row.colleges.home_university,
+          branchCode: row.branches.branch_code,
+          branchName: row.branches.branch_name,
+          seatBlockType: row.seat_block_type,
+          category: row.category_code,
+          cutoffPercentile: cutoffPct,
+          cutoffMeritNo: row.stage1_merit_no,
+          stage2Percentile: row.stage2_percentile ? parseFloat(row.stage2_percentile) : null,
+          stage2MeritNo: row.stage2_merit_no,
+          studentPercentile: pct,
+          percentileDiff: parseFloat((pct - cutoffPct).toFixed(7)),
+          chance,
+          chanceLabel: getChanceLabel(chance)
         });
-      });
+      }
     });
 
     // Sort: High > Medium > Low, then by percentile diff (closest first for High, descending for Medium/Low)

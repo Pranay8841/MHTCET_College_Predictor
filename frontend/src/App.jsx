@@ -13,7 +13,7 @@ function App() {
           <div className="container">
             <NavLink to="/" className="navbar-brand">
               <span className="brand-icon">🎓</span>
-              <span>MHT<span className="brand-accent">CET</span></span>
+              <span>NAVO<span className="brand-accent">DISHA</span></span>
             </NavLink>
             <ul className="navbar-nav">
               <li>

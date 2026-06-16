@@ -11,7 +11,7 @@ const {
   getAllColleges,
   getUniqueBranches,
   getCollegeTypes
-} = require('../services/firestoreService');
+} = require('../services/supabaseService');
 
 /**
  * GET /api/colleges
