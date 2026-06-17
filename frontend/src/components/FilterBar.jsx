@@ -2,13 +2,16 @@ import React from 'react';
 import {
   CHANCE_FILTER_OPTIONS,
   SORT_OPTIONS,
-  COLLEGE_TYPE_OPTIONS
+  COLLEGE_TYPE_OPTIONS,
+  JOSAA_COLLEGE_TYPE_OPTIONS
 } from '../utils/categoryOptions';
 
-function FilterBar({ filters, onFilterChange, branches }) {
+function FilterBar({ filters, onFilterChange, branches, isJosaa }) {
   const handleChange = (field, value) => {
     onFilterChange({ ...filters, [field]: value });
   };
+
+  const collegeTypeOptions = isJosaa ? JOSAA_COLLEGE_TYPE_OPTIONS : COLLEGE_TYPE_OPTIONS;
 
   return (
     <div className="filter-bar">
@@ -45,7 +48,7 @@ function FilterBar({ filters, onFilterChange, branches }) {
         onChange={e => handleChange('collegeTypeFilter', e.target.value)}
         id="filter-college-type"
       >
-        {COLLEGE_TYPE_OPTIONS.map(opt => (
+        {collegeTypeOptions.map(opt => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>

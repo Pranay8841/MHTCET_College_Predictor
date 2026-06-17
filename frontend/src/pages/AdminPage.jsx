@@ -49,7 +49,7 @@ function AdminPage() {
     e.preventDefault();
     setDragOver(false);
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile?.type === 'application/pdf') {
+    if (droppedFile?.type === 'application/pdf' || droppedFile?.name.endsWith('.html')) {
       setFile(droppedFile);
     }
   };
@@ -64,7 +64,7 @@ function AdminPage() {
 
     if (!file) {
       setUploadStatus('error');
-      setUploadMessage('Please select a PDF file');
+      setUploadMessage('Please select a PDF or HTML file');
       return;
     }
 
@@ -85,7 +85,7 @@ function AdminPage() {
       });
 
       setUploadStatus('success');
-      setUploadMessage(result.message || 'PDF uploaded successfully! Processing started.');
+      setUploadMessage(result.message || 'File uploaded successfully! Processing started.');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -116,7 +116,7 @@ function AdminPage() {
           ⚙️ Admin Panel
         </h1>
         <p style={{ color: 'var(--color-text-secondary)' }}>
-          Upload CAP Round cutoff PDFs for processing
+          Upload CAP Round cutoff PDFs or JoSAA HTML files for processing
         </p>
       </div>
 
@@ -154,7 +154,7 @@ function AdminPage() {
             fontWeight: 700,
             marginBottom: 'var(--space-6)'
           }}>
-            📤 Upload Cutoff PDF
+            📤 Upload Cutoff File (PDF/HTML)
           </h2>
 
           <div className="form-grid" style={{ marginBottom: 'var(--space-6)' }}>
@@ -167,7 +167,7 @@ function AdminPage() {
                 className="form-input"
                 value={roundName}
                 onChange={e => setRoundName(e.target.value)}
-                placeholder="e.g. CAP Round I"
+                placeholder="e.g. CAP Round I or JoSAA Round 1"
                 required
               />
             </div>
@@ -198,7 +198,7 @@ function AdminPage() {
             <input
               type="file"
               ref={fileInputRef}
-              accept=".pdf"
+              accept=".pdf,.html"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
               id="admin-pdf-file"
@@ -214,11 +214,11 @@ function AdminPage() {
                   {(file.size / (1024 * 1024)).toFixed(2)} MB
                 </>
               ) : (
-                'Drop your PDF here or click to browse'
+                'Drop your PDF or HTML file here or click to browse'
               )}
             </div>
             <div className="upload-zone-hint">
-              Supports PDF files up to 50 MB
+              Supports PDF or HTML files up to 50 MB
             </div>
           </div>
 
@@ -272,7 +272,7 @@ function AdminPage() {
                 Uploading & Processing...
               </>
             ) : (
-              '🚀 Upload & Process PDF'
+              '🚀 Upload & Process File'
             )}
           </button>
         </div>

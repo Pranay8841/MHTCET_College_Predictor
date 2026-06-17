@@ -6,7 +6,9 @@ import {
   CATEGORY_OPTIONS,
   GENDER_OPTIONS,
   SEAT_TYPE_OPTIONS,
-  COLLEGE_TYPE_OPTIONS
+  COLLEGE_TYPE_OPTIONS,
+  JOSAA_CATEGORY_OPTIONS,
+  JOSAA_SEAT_TYPE_OPTIONS
 } from '../utils/categoryOptions';
 
 function PredictorForm() {
@@ -14,7 +16,9 @@ function PredictorForm() {
   const { roundsList, branches, loading: loadingData } = useColleges();
 
   const [formData, setFormData] = useState({
+    examId: 'mhtcet',
     percentile: '',
+    rank: '',
     category: 'OPEN',
     gender: 'G',
     seatType: 'S',
@@ -33,20 +37,46 @@ function PredictorForm() {
     }
   };
 
+  const handleExamChange = (newExamId) => {
+    setFormData({
+      examId: newExamId,
+      percentile: '',
+      rank: '',
+      category: 'OPEN',
+      gender: 'G',
+      seatType: newExamId === 'josaa' ? 'AI' : 'S',
+      roundId: '',
+      branch: [],
+      collegeType: 'all'
+    });
+    setErrors({});
+  };
+
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.percentile) {
-      newErrors.percentile = 'Please enter your percentile';
+    if (formData.examId === 'josaa') {
+      if (!formData.rank) {
+        newErrors.rank = 'Please enter your JEE rank';
+      } else {
+        const rk = parseInt(formData.rank, 10);
+        if (isNaN(rk) || rk <= 0) {
+          newErrors.rank = 'Rank must be a positive integer';
+        }
+      }
     } else {
-      const pct = parseFloat(formData.percentile);
-      if (isNaN(pct) || pct < 0 || pct > 100) {
-        newErrors.percentile = 'Percentile must be between 0 and 100';
+      if (!formData.percentile) {
+        newErrors.percentile = 'Please enter your percentile';
+      } else {
+        const pct = parseFloat(formData.percentile);
+        if (isNaN(pct) || pct < 0 || pct > 100) {
+          newErrors.percentile = 'Percentile must be between 0 and 100';
+        }
       }
     }
 
     if (!formData.roundId) {
-      newErrors.roundId = 'Please select a CAP round';
+      newErrors.roundId = 'Please select a round';
     }
 
     setErrors(newErrors);
@@ -59,13 +89,19 @@ function PredictorForm() {
 
     // Build query params
     const params = new URLSearchParams({
-      percentile: formData.percentile,
+      examId: formData.examId,
       category: formData.category,
       gender: formData.gender,
       seatType: formData.seatType,
       roundId: formData.roundId,
       collegeType: formData.collegeType
     });
+
+    if (formData.examId === 'josaa') {
+      params.set('rank', formData.rank);
+    } else {
+      params.set('percentile', formData.percentile);
+    }
 
     // Add selected branches
     if (formData.branch.length > 0) {
@@ -80,10 +116,18 @@ function PredictorForm() {
   // Branch options for react-select
   const branchOptions = branches.map(b => ({ value: b, label: b }));
 
-  // Round options
-  const roundOptions = roundsList.length > 0
-    ? roundsList.map(r => ({ value: r.id, label: `${r.roundName} (${r.year})` }))
-    : [{ value: '', label: 'No rounds available — upload data in Admin' }];
+  // Filter rounds list based on exam selection
+  const filteredRoundsList = roundsList.filter(r => {
+    const isJosaaRound = r.id.toLowerCase().includes('josaa') || (r.roundName && r.roundName.toLowerCase().includes('josaa'));
+    return formData.examId === 'josaa' ? isJosaaRound : !isJosaaRound;
+  });
+
+  const roundOptions = filteredRoundsList.length > 0
+    ? filteredRoundsList.map(r => ({ value: r.id, label: `${r.roundName} (${r.year})` }))
+    : [{ value: '', label: `No rounds available for ${formData.examId === 'josaa' ? 'JoSAA' : 'MHT-CET'}` }];
+
+  const categoryOptionsList = formData.examId === 'josaa' ? JOSAA_CATEGORY_OPTIONS : CATEGORY_OPTIONS;
+  const seatTypeOptionsList = formData.examId === 'josaa' ? JOSAA_SEAT_TYPE_OPTIONS : SEAT_TYPE_OPTIONS;
 
   return (
     <form className="predictor-form-card" onSubmit={handleSubmit} id="predictor-form">
@@ -98,33 +142,94 @@ function PredictorForm() {
       </h2>
 
       <div className="form-grid">
-        {/* Percentile Input */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="percentile">Your Percentile *</label>
-          <div className="form-input-group">
-            <input
-              type="number"
-              id="percentile"
-              className="form-input"
-              placeholder="e.g. 88.5013"
-              step="0.0001"
-              min="0"
-              max="100"
-              value={formData.percentile}
-              onChange={e => handleChange('percentile', e.target.value)}
-            />
-            <span className="form-input-suffix">%ile</span>
+        {/* Entrance Exam Selection */}
+        <div className="form-group full-width" style={{ marginBottom: 'var(--space-4)' }}>
+          <label className="form-label">Entrance Exam *</label>
+          <div className="radio-group">
+            <div className="radio-option">
+              <input
+                type="radio"
+                name="examId"
+                id="exam-mhtcet"
+                value="mhtcet"
+                checked={formData.examId === 'mhtcet'}
+                onChange={() => handleExamChange('mhtcet')}
+              />
+              <label htmlFor="exam-mhtcet" className="radio-card">
+                <strong>MHT-CET</strong>
+                <span>Maharashtra Cutoffs (%ile)</span>
+              </label>
+            </div>
+            <div className="radio-option" style={{ opacity: 0.5, pointerEvents: 'none', position: 'relative' }}>
+              <input
+                type="radio"
+                name="examId"
+                id="exam-josaa"
+                value="josaa"
+                checked={formData.examId === 'josaa'}
+                onChange={() => handleExamChange('josaa')}
+                disabled
+              />
+              <label htmlFor="exam-josaa" className="radio-card">
+                <strong>JoSAA (IIT/NIT)</strong>
+                <span>Coming Soon</span>
+              </label>
+            </div>
           </div>
-          {errors.percentile && (
-            <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
-              {errors.percentile}
-            </span>
-          )}
         </div>
 
-        {/* CAP Round */}
+        {/* Score/Rank Input */}
+        {formData.examId === 'josaa' ? (
+          <div className="form-group">
+            <label className="form-label" htmlFor="rank">Your JEE Rank *</label>
+            <div className="form-input-group">
+              <input
+                type="number"
+                id="rank"
+                className="form-input"
+                placeholder="e.g. 5240"
+                min="1"
+                value={formData.rank}
+                onChange={e => handleChange('rank', e.target.value)}
+              />
+              <span className="form-input-suffix">Rank</span>
+            </div>
+            {errors.rank && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                {errors.rank}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label" htmlFor="percentile">Your Percentile *</label>
+            <div className="form-input-group">
+              <input
+                type="number"
+                id="percentile"
+                className="form-input"
+                placeholder="e.g. 88.5013"
+                step="0.0001"
+                min="0"
+                max="100"
+                value={formData.percentile}
+                onChange={e => handleChange('percentile', e.target.value)}
+              />
+              <span className="form-input-suffix">%ile</span>
+            </div>
+            {errors.percentile && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                {errors.percentile}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Round Selection */}
         <div className="form-group">
-          <label className="form-label" htmlFor="roundId">CAP Round *</label>
+          <label className="form-label" htmlFor="roundId">
+            {formData.examId === 'josaa' ? 'JoSAA Round *' : 'CAP Round *'}
+          </label>
           <select
             id="roundId"
             className="form-select"
@@ -145,7 +250,7 @@ function PredictorForm() {
 
         {/* Gender */}
         <div className="form-group">
-          <label className="form-label">Gender *</label>
+          <label className="form-label">Gender / Seat Pool *</label>
           <div className="radio-group">
             {GENDER_OPTIONS.map(opt => (
               <div key={opt.value} className="radio-option">
@@ -158,7 +263,7 @@ function PredictorForm() {
                   onChange={e => handleChange('gender', e.target.value)}
                 />
                 <label htmlFor={`gender-${opt.value}`}>
-                  {opt.icon} {opt.label}
+                  {opt.icon} {formData.examId === 'josaa' && opt.value === 'G' ? 'Gender-Neutral' : opt.label}
                 </label>
               </div>
             ))}
@@ -174,29 +279,33 @@ function PredictorForm() {
             value={formData.category}
             onChange={e => handleChange('category', e.target.value)}
           >
-            {CATEGORY_OPTIONS.map(opt => (
+            {categoryOptionsList.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </div>
 
-        {/* Seat Type */}
+        {/* Seat Type / Quota */}
         <div className="form-group">
-          <label className="form-label" htmlFor="seatType">Seat Type *</label>
+          <label className="form-label" htmlFor="seatType">
+            {formData.examId === 'josaa' ? 'Quota *' : 'Seat Type *'}
+          </label>
           <select
             id="seatType"
             className="form-select"
             value={formData.seatType}
             onChange={e => handleChange('seatType', e.target.value)}
           >
-            {SEAT_TYPE_OPTIONS.map(opt => (
+            {seatTypeOptionsList.map(opt => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            {SEAT_TYPE_OPTIONS.find(s => s.value === formData.seatType)?.description}
+            {formData.examId === 'josaa'
+              ? 'AI: All India (default for IITs), HS/OS: NITs Quota system'
+              : SEAT_TYPE_OPTIONS.find(s => s.value === formData.seatType)?.description}
           </span>
         </div>
 
@@ -209,9 +318,17 @@ function PredictorForm() {
             value={formData.collegeType}
             onChange={e => handleChange('collegeType', e.target.value)}
           >
-            {COLLEGE_TYPE_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+            {formData.examId === 'josaa' ? (
+              <>
+                <option value="all">All (IIT/NIT/IIIT/GFTI)</option>
+                <option value="IIT/NIT">IIT / NIT</option>
+                <option value="Central Govt">Central Govt</option>
+              </>
+            ) : (
+              COLLEGE_TYPE_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))
+            )}
           </select>
         </div>
 

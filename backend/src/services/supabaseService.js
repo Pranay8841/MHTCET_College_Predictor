@@ -224,8 +224,131 @@ function chunkArray(array, size) {
   return chunks;
 }
 
+/**
+ * Deterministically hash a name to a unique string that fits in a VARCHAR(10) column.
+ */
+function generateCollegeCode(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) & 0xFFFFFFF;
+  }
+  return 'J' + hash.toString(36).toUpperCase().substring(0, 9);
+}
+
+/**
+ * Deterministically hash a branch name to a unique code that fits in a VARCHAR(15) column.
+ */
+function generateBranchCode(collegeCode, branchName) {
+  let hash = 0;
+  for (let i = 0; i < branchName.length; i++) {
+    hash = (hash * 31 + branchName.charCodeAt(i)) & 0xFFFFFFF;
+  }
+  const bHash = hash.toString(36).toUpperCase().substring(0, 9);
+  return (collegeCode + bHash).substring(0, 15);
+}
+
+/**
+ * Save JoSAA parsed cutoff rows to Supabase.
+ */
+async function saveJosaaCutoffsToSupabase(parsedData, roundId, year) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
+  }
+
+  console.log(`🚀 Starting migration of ${parsedData.length} JoSAA entries to Supabase...`);
+
+  const collegeMap = new Map();
+  const branchMap = new Map();
+  const cutoffMap = new Map();
+
+  parsedData.forEach(row => {
+    const collegeCode = generateCollegeCode(row.collegeName);
+    const branchCode = generateBranchCode(collegeCode, row.branchName);
+
+    collegeMap.set(collegeCode, {
+      college_code: collegeCode,
+      college_name: row.collegeName,
+      college_type: row.collegeName.includes('Technology') ? 'IIT/NIT' : 'Central Govt',
+      home_university: 'Central'
+    });
+
+    branchMap.set(branchCode, {
+      branch_code: branchCode,
+      branch_name: row.branchName
+    });
+
+    // Extract numbers from ranks
+    const openRankInt = parseInt(row.openRank.replace(/[^0-9]/g, ''), 10) || null;
+    const closeRankInt = parseInt(row.closeRank.replace(/[^0-9]/g, ''), 10) || null;
+
+    // Suffix category with GN (Gender-Neutral) or F (Female-only)
+    const genderPrefix = row.gender.includes('Female-only') ? 'L' : 'G';
+    const categoryCode = `${genderPrefix}-${row.category}`;
+
+    const uniqueKey = `josaa_${roundId}_${collegeCode}_${branchCode}_${row.quota}_${categoryCode}`;
+
+    cutoffMap.set(uniqueKey, {
+      exam_id: 'josaa',
+      round_id: roundId,
+      year: year,
+      college_code: collegeCode,
+      branch_code: branchCode,
+      seat_block_type: row.quota,
+      category_code: categoryCode,
+      stage1_merit_no: openRankInt,  // Opening Rank
+      stage1_percentile: null,
+      stage2_merit_no: closeRankInt, // Closing Rank
+      stage2_percentile: null,
+      updated_at: new Date().toISOString()
+    });
+  });
+
+  const collegesList = Array.from(collegeMap.values());
+  const branchesList = Array.from(branchMap.values());
+  const cutoffRecords = Array.from(cutoffMap.values());
+
+  // Upsert Colleges in batches of 200
+  console.log(`   Upserting ${collegesList.length} JoSAA colleges...`);
+  const collegeChunks = chunkArray(collegesList, 200);
+  for (const chunk of collegeChunks) {
+    const { error } = await supabase
+      .from('colleges')
+      .upsert(chunk, { onConflict: 'college_code' });
+    if (error) throw new Error(`Colleges upsert failed: ${error.message}`);
+  }
+
+  // Upsert Branches in batches of 200
+  console.log(`   Upserting ${branchesList.length} JoSAA branches...`);
+  const branchChunks = chunkArray(branchesList, 200);
+  for (const chunk of branchChunks) {
+    const { error } = await supabase
+      .from('branches')
+      .upsert(chunk, { onConflict: 'branch_code' });
+    if (error) throw new Error(`Branches upsert failed: ${error.message}`);
+  }
+
+  // Upsert Cutoffs in batches of 1000
+  console.log(`   Upserting ${cutoffRecords.length} JoSAA flat cutoffs...`);
+  const cutoffChunks = chunkArray(cutoffRecords, 1000);
+  let processedCount = 0;
+  for (const chunk of cutoffChunks) {
+    const { error } = await supabase
+      .from('cutoffs')
+      .upsert(chunk, { onConflict: 'exam_id,round_id,college_code,branch_code,seat_block_type,category_code' });
+    if (error) throw new Error(`Cutoffs upsert failed at batch starting at ${processedCount}: ${error.message}`);
+    processedCount += chunk.length;
+  }
+
+  console.log(`✅ JoSAA Supabase write complete. Loaded ${collegesList.length} colleges, ${branchesList.length} branches, and ${cutoffRecords.length} cutoffs.`);
+  return {
+    totalColleges: collegesList.length,
+    totalBranches: branchesList.length
+  };
+}
+
 module.exports = {
   saveCutoffsToSupabase,
+  saveJosaaCutoffsToSupabase,
   getUniqueBranches,
   getAllColleges,
   getCollegeTypes,

@@ -2,9 +2,12 @@ import React from 'react';
 import { getChanceDisplay } from '../utils/categoryOptions';
 
 function CollegeCard({ prediction, index }) {
+  const isJosaa = prediction.studentRank !== null && prediction.studentRank !== undefined;
   const chance = getChanceDisplay(prediction.chanceLabel);
   const diff = prediction.percentileDiff;
-  const diffFormatted = diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+  const diffFormatted = isJosaa
+    ? (diff >= 0 ? `+${diff}` : `${diff}`)
+    : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
 
   return (
     <div
@@ -32,26 +35,28 @@ function CollegeCard({ prediction, index }) {
         <span className="meta-tag">🏛️ {prediction.collegeType || 'N/A'}</span>
         <span className="meta-tag">📍 {prediction.category}</span>
         <span className="meta-tag">
-          {prediction.seatBlockType.includes('State')
-            ? '🌐 State Level'
-            : prediction.seatBlockType.includes('Other')
-              ? '🔄 Other University'
-              : '🏠 Home University'}
+          {isJosaa
+            ? `🌐 Quota: ${prediction.seatBlockType}`
+            : prediction.seatBlockType.includes('State')
+              ? '🌐 State Level'
+              : prediction.seatBlockType.includes('Other')
+                ? '🔄 Other University'
+                : '🏠 Home University'}
         </span>
       </div>
 
       {/* Cutoff Data */}
       <div className="college-cutoff-row">
         <div className="cutoff-item">
-          <div className="cutoff-label">Cutoff</div>
+          <div className="cutoff-label">{isJosaa ? 'Closing Rank' : 'Cutoff'}</div>
           <div className="cutoff-value" style={{ color: 'var(--color-text-primary)' }}>
-            {prediction.cutoffPercentile?.toFixed(2) ?? 'N/A'}
+            {isJosaa ? prediction.stage2MeritNo : (prediction.cutoffPercentile?.toFixed(2) ?? 'N/A')}
           </div>
         </div>
         <div className="cutoff-item">
-          <div className="cutoff-label">Your %ile</div>
+          <div className="cutoff-label">{isJosaa ? 'Your Rank' : 'Your %ile'}</div>
           <div className="cutoff-value" style={{ color: 'var(--color-accent-light)' }}>
-            {prediction.studentPercentile?.toFixed(2)}
+            {isJosaa ? prediction.studentRank : prediction.studentPercentile?.toFixed(2)}
           </div>
         </div>
         <div className="cutoff-item">
@@ -62,20 +67,36 @@ function CollegeCard({ prediction, index }) {
         </div>
       </div>
 
-      {/* Stage 2 info if available */}
-      {prediction.stage2Percentile && (
-        <div style={{
-          marginTop: 'var(--space-3)',
-          paddingTop: 'var(--space-3)',
-          borderTop: '1px solid var(--color-border)',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-muted)',
-          display: 'flex',
-          justifyContent: 'space-between'
-        }}>
-          <span>Stage II Cutoff: {prediction.stage2Percentile?.toFixed(2)}</span>
-          <span>Merit: #{prediction.cutoffMeritNo || 'N/A'}</span>
-        </div>
+      {/* Footer / Footer-info */}
+      {isJosaa ? (
+        prediction.cutoffMeritNo && (
+          <div style={{
+            marginTop: 'var(--space-3)',
+            paddingTop: 'var(--space-3)',
+            borderTop: '1px solid var(--color-border)',
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
+            display: 'flex',
+            justifyContent: 'space-between'
+          }}>
+            <span>Opening Rank: {prediction.cutoffMeritNo}</span>
+          </div>
+        )
+      ) : (
+        prediction.stage2Percentile && (
+          <div style={{
+            marginTop: 'var(--space-3)',
+            paddingTop: 'var(--space-3)',
+            borderTop: '1px solid var(--color-border)',
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
+            display: 'flex',
+            justifyContent: 'space-between'
+          }}>
+            <span>Stage II Cutoff: {prediction.stage2Percentile?.toFixed(2)}</span>
+            <span>Merit: #{prediction.cutoffMeritNo || 'N/A'}</span>
+          </div>
+        )
       )}
     </div>
   );

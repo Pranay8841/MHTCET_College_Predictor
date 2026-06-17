@@ -39,6 +39,12 @@ export const COLLEGE_TYPE_OPTIONS = [
   { value: 'Autonomous', label: 'Autonomous' }
 ];
 
+export const JOSAA_COLLEGE_TYPE_OPTIONS = [
+  { value: 'all', label: 'All College Types' },
+  { value: 'IIT/NIT', label: 'IIT / NIT' },
+  { value: 'Central Govt', label: 'Central Govt' }
+];
+
 export const SORT_OPTIONS = [
   { value: 'chance-desc', label: 'Best Chance First' },
   { value: 'cutoff-asc', label: 'Cutoff: Low → High' },
@@ -52,6 +58,25 @@ export const CHANCE_FILTER_OPTIONS = [
   { value: 'High', label: '🟢 High Chance' },
   { value: 'Medium', label: '🟡 Medium Chance' },
   { value: 'Low', label: '🔴 Low Chance' }
+];
+
+export const JOSAA_CATEGORY_OPTIONS = [
+  { value: 'OPEN', label: 'OPEN — Open / General' },
+  { value: 'OBC-NCL', label: 'OBC-NCL — Other Backward Classes (Non-Creamy Layer)' },
+  { value: 'SC', label: 'SC — Scheduled Caste' },
+  { value: 'ST', label: 'ST — Scheduled Tribe' },
+  { value: 'EWS', label: 'EWS — Economically Weaker Section' },
+  { value: 'OPEN (PwD)', label: 'OPEN (PwD) — Open with Disability' },
+  { value: 'OBC-NCL (PwD)', label: 'OBC-NCL (PwD) — OBC Non-Creamy Layer with Disability' },
+  { value: 'SC (PwD)', label: 'SC (PwD) — Scheduled Caste with Disability' },
+  { value: 'ST (PwD)', label: 'ST (PwD) — Scheduled Tribe with Disability' },
+  { value: 'EWS (PwD)', label: 'EWS (PwD) — Economically Weaker Section with Disability' }
+];
+
+export const JOSAA_SEAT_TYPE_OPTIONS = [
+  { value: 'AI', label: 'AI — All India' },
+  { value: 'HS', label: 'HS — Home State' },
+  { value: 'OS', label: 'OS — Other State' }
 ];
 
 /**

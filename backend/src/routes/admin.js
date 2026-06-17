@@ -8,18 +8,20 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { parseCutoffPDF } = require('../services/pdfParser');
-const { saveCutoffsToSupabase } = require('../services/supabaseService');
+const { saveCutoffsToSupabase, saveJosaaCutoffsToSupabase } = require('../services/supabaseService');
 const { supabase } = require('../supabaseClient');
 
-// Multer config — memory storage, 50MB limit for large PDFs
+// Multer config — memory storage, 50MB limit for large files (PDF or HTML)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    const isPdf = file.mimetype === 'application/pdf';
+    const isHtml = file.mimetype === 'text/html' || file.originalname.endsWith('.html');
+    if (isPdf || isHtml) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'), false);
+      cb(new Error('Only PDF or HTML files are allowed'), false);
     }
   }
 });
@@ -46,8 +48,10 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
 
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file uploaded' });
+      return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    const isHtml = req.file.mimetype === 'text/html' || req.file.originalname.endsWith('.html');
 
     const { roundName, year } = req.body;
     if (!roundName || !year) {
@@ -56,7 +60,7 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
 
     const roundId = `${year}_${roundName.replace(/\s+/g, '_')}`;
     console.log(`\n📤 Upload started: ${roundName} (${year}) → roundId: ${roundId}`);
-    console.log(`   PDF size: ${(req.file.size / (1024 * 1024)).toFixed(2)} MB`);
+    console.log(`   File size: ${(req.file.size / (1024 * 1024)).toFixed(2)} MB (${isHtml ? 'HTML' : 'PDF'})`);
 
     // 1. Upload PDF to Cloudinary (if configured)
     let cloudinaryUrl = null;
@@ -91,22 +95,38 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
     res.json({
       success: true,
       roundId,
-      message: 'PDF uploaded successfully. Processing started.',
+      message: `${isHtml ? 'HTML' : 'PDF'} uploaded successfully. Processing started.`,
       cloudinaryUrl
     });
 
-    // 4. Parse PDF (async — don't block response)
-    console.log(`\n⏳ Parsing PDF...`);
+    // 4. Parse PDF or HTML (async — don't block response)
+    let parsedData;
     const parseStart = Date.now();
-    const parsedData = await parseCutoffPDF(req.file.buffer);
+    if (isHtml) {
+      console.log(`\n⏳ Parsing HTML...`);
+      const { parseJosaaHTML } = require('../services/josaaParser');
+      parsedData = parseJosaaHTML(req.file.buffer.toString('utf-8'));
+    } else {
+      console.log(`\n⏳ Parsing PDF...`);
+      parsedData = await parseCutoffPDF(req.file.buffer);
+    }
     console.log(`   Parsing completed in ${((Date.now() - parseStart) / 1000).toFixed(1)}s`);
-    console.log(`   Found ${parsedData.length} branch entries`);
+    console.log(`   Found ${parsedData.length} entries`);
 
     // 5. Save to Supabase in batches
     if (supabase) {
       console.log(`\n💾 Saving to Supabase...`);
       const saveStart = Date.now();
-      const { totalColleges, totalBranches } = await saveCutoffsToSupabase(parsedData, roundId, year);
+      let totalColleges, totalBranches;
+      if (isHtml) {
+        const res = await saveJosaaCutoffsToSupabase(parsedData, roundId, year);
+        totalColleges = res.totalColleges;
+        totalBranches = res.totalBranches;
+      } else {
+        const res = await saveCutoffsToSupabase(parsedData, roundId, year);
+        totalColleges = res.totalColleges;
+        totalBranches = res.totalBranches;
+      }
       console.log(`   Supabase save completed in ${((Date.now() - saveStart) / 1000).toFixed(1)}s`);
 
       // 6. Update metadata with final counts
