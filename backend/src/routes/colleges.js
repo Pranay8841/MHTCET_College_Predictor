@@ -47,8 +47,8 @@ router.get('/', async (req, res) => {
  */
 router.get('/branches', async (req, res) => {
   try {
-    const { roundId } = req.query;
-    const branches = await getUniqueBranches(roundId);
+    const { roundId, examId } = req.query;
+    const branches = await getUniqueBranches(roundId, examId);
 
     res.json({
       total: branches.length,

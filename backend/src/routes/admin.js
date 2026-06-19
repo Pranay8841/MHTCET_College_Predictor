@@ -8,7 +8,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { parseCutoffPDF } = require('../services/pdfParser');
-const { saveCutoffsToSupabase, saveJosaaCutoffsToSupabase } = require('../services/supabaseService');
+const { saveCutoffsToSupabase, saveJosaaCutoffsToSupabase, clearBranchCache } = require('../services/supabaseService');
 const { supabase } = require('../supabaseClient');
 
 // Multer config — memory storage, 50MB limit for large files (PDF or HTML)
@@ -52,14 +52,18 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
     }
 
     const isHtml = req.file.mimetype === 'text/html' || req.file.originalname.endsWith('.html');
-
-    const { roundName, year } = req.body;
+    const { roundName, year, examId = 'mhtcet' } = req.body;
     if (!roundName || !year) {
       return res.status(400).json({ error: 'roundName and year are required' });
     }
+    const actualExamId = isHtml ? 'josaa' : examId;
 
-    const roundId = `${year}_${roundName.replace(/\s+/g, '_')}`;
-    console.log(`\n📤 Upload started: ${roundName} (${year}) → roundId: ${roundId}`);
+    // Ensure unique round_id per exam stream
+    let roundId = `${year}_${roundName.replace(/\s+/g, '_')}`;
+    if (actualExamId !== 'mhtcet') {
+      roundId += `_${actualExamId}`;
+    }
+    console.log(`\n📤 Upload started: ${roundName} (${year}) for ${actualExamId} → roundId: ${roundId}`);
     console.log(`   File size: ${(req.file.size / (1024 * 1024)).toFixed(2)} MB (${isHtml ? 'HTML' : 'PDF'})`);
 
     // 1. Upload PDF to Cloudinary (if configured)
@@ -123,7 +127,7 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
         totalColleges = res.totalColleges;
         totalBranches = res.totalBranches;
       } else {
-        const res = await saveCutoffsToSupabase(parsedData, roundId, year);
+        const res = await saveCutoffsToSupabase(parsedData, roundId, year, actualExamId);
         totalColleges = res.totalColleges;
         totalBranches = res.totalBranches;
       }
@@ -145,6 +149,7 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
         delete global.cutoffCache[roundId];
         console.log(`🗑️  Cleared memory cache for round: "${roundId}"`);
       }
+      clearBranchCache();
 
       console.log(`\n✅ Upload complete: ${totalColleges} colleges, ${totalBranches} branches`);
       console.log(`   Total time: ${((Date.now() - startTime) / 1000).toFixed(1)}s\n`);

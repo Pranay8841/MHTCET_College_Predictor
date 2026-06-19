@@ -36,9 +36,12 @@ export const fetchPredictions = async (params) => {
   return response.data;
 };
 
-export const fetchBranches = async (roundId) => {
+export const fetchBranches = async (roundId, examId) => {
   const response = await api.get('/colleges/branches', {
-    params: roundId ? { roundId } : {}
+    params: {
+      ...(roundId && { roundId }),
+      ...(examId && { examId })
+    }
   });
   return response.data;
 };

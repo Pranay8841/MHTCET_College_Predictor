@@ -4,6 +4,7 @@ import { uploadPDF, fetchRounds } from '../utils/api';
 function AdminPage() {
   const [roundName, setRoundName] = useState('CAP Round I');
   const [year, setYear] = useState('2024-25');
+  const [examId, setExamId] = useState('mhtcet');
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -78,6 +79,7 @@ function AdminPage() {
       formData.append('pdfFile', file);
       formData.append('roundName', roundName);
       formData.append('year', year);
+      formData.append('examId', examId);
 
       const result = await uploadPDF(formData, adminSecret, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -158,6 +160,25 @@ function AdminPage() {
           </h2>
 
           <div className="form-grid" style={{ marginBottom: 'var(--space-6)' }}>
+            {/* Exam Selector */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="admin-exam-id">Exam / Stream</label>
+              <select
+                id="admin-exam-id"
+                className="form-select"
+                value={examId}
+                onChange={e => {
+                  setExamId(e.target.value);
+                  setFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+              >
+                <option value="mhtcet">MHT-CET Engineering (PDF)</option>
+                <option value="pharma">MHT-CET Pharmacy (PDF)</option>
+                <option value="josaa">JoSAA (IIT/NIT) (HTML)</option>
+              </select>
+            </div>
+
             {/* Round Name */}
             <div className="form-group">
               <label className="form-label" htmlFor="admin-round-name">Round Name</label>
@@ -198,7 +219,7 @@ function AdminPage() {
             <input
               type="file"
               ref={fileInputRef}
-              accept=".pdf,.html"
+              accept={examId === 'josaa' ? '.html' : '.pdf'}
               onChange={handleFileSelect}
               style={{ display: 'none' }}
               id="admin-pdf-file"
@@ -214,11 +235,11 @@ function AdminPage() {
                   {(file.size / (1024 * 1024)).toFixed(2)} MB
                 </>
               ) : (
-                'Drop your PDF or HTML file here or click to browse'
+                `Drop your ${examId === 'josaa' ? 'HTML' : 'PDF'} file here or click to browse`
               )}
             </div>
             <div className="upload-zone-hint">
-              Supports PDF or HTML files up to 50 MB
+              Supports {examId === 'josaa' ? 'HTML' : 'PDF'} files up to 50 MB
             </div>
           </div>
 
@@ -304,6 +325,7 @@ function AdminPage() {
                   <span className="round-name">{round.roundName || id}</span>
                   <span className="round-meta">
                     Year: {round.year || 'N/A'} • 
+                    Exam: {id.toLowerCase().includes('pharma') ? 'MHT-CET Pharma' : id.toLowerCase().includes('josaa') ? 'JoSAA' : 'MHT-CET Engineering'} • 
                     {round.totalColleges ? ` ${round.totalColleges} colleges` : ''} • 
                     {round.totalBranches ? ` ${round.totalBranches} branches` : ''}
                   </span>

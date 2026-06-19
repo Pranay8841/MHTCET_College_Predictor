@@ -178,8 +178,13 @@ function ResultsPage() {
       const doc = new jsPDF('landscape', 'mm', 'a4');
 
       // Title
+      const docTitle = queryParams.isJosaa
+        ? 'JoSAA College Predictor — Results'
+        : queryParams.examId === 'pharma'
+          ? 'MHT-CET Pharmacy College Predictor — Results'
+          : 'MHT-CET Engineering College Predictor — Results';
       doc.setFontSize(16);
-      doc.text(queryParams.isJosaa ? 'JoSAA College Predictor — Results' : 'MHTCET College Predictor — Results', 14, 15);
+      doc.text(docTitle, 14, 15);
       doc.setFontSize(10);
       
       const subInfo = queryParams.isJosaa
@@ -250,7 +255,12 @@ function ResultsPage() {
         }
       });
 
-      doc.save(`${queryParams.isJosaa ? 'JoSAA' : 'MHTCET'}_Predictions_${queryParams.isJosaa ? queryParams.rank : queryParams.percentile}.pdf`);
+      const filenamePrefix = queryParams.isJosaa
+        ? 'JoSAA'
+        : queryParams.examId === 'pharma'
+          ? 'MHTCET_Pharma'
+          : 'MHTCET_Engineering';
+      doc.save(`${filenamePrefix}_Predictions_${queryParams.isJosaa ? queryParams.rank : queryParams.percentile}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
       alert('Failed to generate PDF. Please try again.');
@@ -303,6 +313,11 @@ function ResultsPage() {
           marginBottom: 'var(--space-2)'
         }}>
           {loading ? 'Searching...' : `Found ${groupedColleges.length} Colleges`}
+          {!loading && (
+            <span className="badge badge-info" style={{ marginLeft: 'var(--space-3)', fontSize: 'var(--text-sm)', verticalAlign: 'middle' }}>
+              {queryParams.examId === 'pharma' ? 'MHT-CET Pharmacy' : queryParams.isJosaa ? 'JoSAA' : 'MHT-CET Engineering'}
+            </span>
+          )}
         </h1>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
           {queryParams.isJosaa ? (

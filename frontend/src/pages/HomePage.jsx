@@ -12,11 +12,11 @@ function HomePage() {
           </div>
           <h1 className="hero-title">
             Find Your Perfect<br />
-            <span className="gradient-text">Engineering College</span>
+            <span className="gradient-text">Engineering &amp; Pharmacy College</span>
           </h1>
           <p className="hero-subtitle">
             Enter your MHT-CET percentile and preferences below. We'll instantly show you
-            every Maharashtra engineering college where you have a realistic chance of admission.
+            every Maharashtra college where you have a realistic chance of admission.
           </p>
         </div>
       </section>

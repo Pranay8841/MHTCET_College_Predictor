@@ -13,8 +13,6 @@ import {
 
 function PredictorForm() {
   const navigate = useNavigate();
-  const { roundsList, branches, loading: loadingData } = useColleges();
-
   const [formData, setFormData] = useState({
     examId: 'mhtcet',
     percentile: '',
@@ -26,6 +24,8 @@ function PredictorForm() {
     branch: [],
     collegeType: 'all'
   });
+
+  const { roundsList, branches, loading: loadingData } = useColleges(formData.examId, formData.roundId);
 
   const [errors, setErrors] = useState({});
 
@@ -118,13 +118,24 @@ function PredictorForm() {
 
   // Filter rounds list based on exam selection
   const filteredRoundsList = roundsList.filter(r => {
-    const isJosaaRound = r.id.toLowerCase().includes('josaa') || (r.roundName && r.roundName.toLowerCase().includes('josaa'));
-    return formData.examId === 'josaa' ? isJosaaRound : !isJosaaRound;
+    const idLower = r.id.toLowerCase();
+    const nameLower = (r.roundName || '').toLowerCase();
+    const isJosaaRound = idLower.includes('josaa') || nameLower.includes('josaa');
+    const isPharmaRound = idLower.includes('pharma') || nameLower.includes('pharma');
+    
+    if (formData.examId === 'pharma') {
+      return isPharmaRound;
+    } else if (formData.examId === 'josaa') {
+      return isJosaaRound;
+    } else {
+      // Default to MHT-CET Engineering (neither josaa nor pharma)
+      return !isJosaaRound && !isPharmaRound;
+    }
   });
 
   const roundOptions = filteredRoundsList.length > 0
     ? filteredRoundsList.map(r => ({ value: r.id, label: `${r.roundName} (${r.year})` }))
-    : [{ value: '', label: `No rounds available for ${formData.examId === 'josaa' ? 'JoSAA' : 'MHT-CET'}` }];
+    : [{ value: '', label: `No rounds available for ${formData.examId === 'pharma' ? 'MHT-CET Pharmacy' : formData.examId === 'josaa' ? 'JoSAA' : 'MHT-CET Engineering'}` }];
 
   const categoryOptionsList = formData.examId === 'josaa' ? JOSAA_CATEGORY_OPTIONS : CATEGORY_OPTIONS;
   const seatTypeOptionsList = formData.examId === 'josaa' ? JOSAA_SEAT_TYPE_OPTIONS : SEAT_TYPE_OPTIONS;
@@ -144,7 +155,7 @@ function PredictorForm() {
       <div className="form-grid">
         {/* Entrance Exam Selection */}
         <div className="form-group full-width" style={{ marginBottom: 'var(--space-4)' }}>
-          <label className="form-label">Entrance Exam *</label>
+          <label className="form-label">Entrance Exam / Stream *</label>
           <div className="radio-group">
             <div className="radio-option">
               <input
@@ -156,23 +167,22 @@ function PredictorForm() {
                 onChange={() => handleExamChange('mhtcet')}
               />
               <label htmlFor="exam-mhtcet" className="radio-card">
-                <strong>MHT-CET</strong>
-                <span>Maharashtra Cutoffs (%ile)</span>
+                <strong>MHT-CET Engineering</strong>
+                <span>Engineering Cutoffs (%ile)</span>
               </label>
             </div>
-            <div className="radio-option" style={{ opacity: 0.5, pointerEvents: 'none', position: 'relative' }}>
+            <div className="radio-option">
               <input
                 type="radio"
                 name="examId"
-                id="exam-josaa"
-                value="josaa"
-                checked={formData.examId === 'josaa'}
-                onChange={() => handleExamChange('josaa')}
-                disabled
+                id="exam-pharma"
+                value="pharma"
+                checked={formData.examId === 'pharma'}
+                onChange={() => handleExamChange('pharma')}
               />
-              <label htmlFor="exam-josaa" className="radio-card">
-                <strong>JoSAA (IIT/NIT)</strong>
-                <span>Coming Soon</span>
+              <label htmlFor="exam-pharma" className="radio-card">
+                <strong>MHT-CET Pharmacy</strong>
+                <span>B.Pharmacy & Pharm D (%ile)</span>
               </label>
             </div>
           </div>

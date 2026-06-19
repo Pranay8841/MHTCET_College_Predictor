@@ -4,16 +4,16 @@ import { fetchBranches, fetchRounds, fetchCollegeTypes } from '../utils/api';
 /**
  * Custom hook for fetching college branches, rounds, and types.
  */
-export function useColleges() {
+export function useColleges(examId, roundId) {
   const [branches, setBranches] = useState([]);
   const [rounds, setRounds] = useState({});
   const [collegeTypes, setCollegeTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const loadBranches = useCallback(async (roundId) => {
+  const loadBranches = useCallback(async (rId, eId) => {
     try {
-      const data = await fetchBranches(roundId);
+      const data = await fetchBranches(rId, eId);
       setBranches(data.branches || []);
     } catch (err) {
       console.error('Failed to load branches:', err);
@@ -45,17 +45,21 @@ export function useColleges() {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadRounds(), loadBranches(), loadCollegeTypes()]);
+      await Promise.all([loadRounds(), loadCollegeTypes()]);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [loadRounds, loadBranches, loadCollegeTypes]);
+  }, [loadRounds, loadCollegeTypes]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    loadBranches(roundId, examId);
+  }, [examId, roundId, loadBranches]);
 
   // Get rounds as array sorted by name
   const roundsList = Object.entries(rounds)

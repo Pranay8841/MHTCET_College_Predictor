@@ -48,7 +48,7 @@ function App() {
         <footer className="footer">
           <div className="container">
             <p>
-              🎓 MHTCET College Predictor — Built for Maharashtra Engineering Aspirants
+              🎓 MHTCET College Predictor — Built for Maharashtra Engineering &amp; Pharmacy Aspirants
             </p>
             <p style={{ marginTop: '0.5rem', fontSize: '0.75rem' }}>
               Predictions based on previous year CAP round cutoff data. Actual results may vary.

@@ -115,24 +115,111 @@ async function saveCutoffsToSupabase(parsedData, roundId, year, examId = 'mhtcet
 /**
  * Get all unique branch names.
  */
+// Cache for unique branch names to prevent redundant DB scanning
+const branchCache = {};
+
 async function getUniqueBranches(roundId, examId = 'mhtcet') {
   if (!supabase) return [];
 
-  // Query branches directly from the branches table
-  // This is highly efficient and covers all branches loaded in the database
-  const { data, error } = await supabase
-    .from('branches')
-    .select('branch_name')
-    .order('branch_name');
-
-  if (error) {
-    console.error('❌ Supabase error fetching branches:', error);
-    return [];
+  const cacheKey = `${examId}_${roundId || 'all'}`;
+  if (branchCache[cacheKey]) {
+    console.log(`⚡ Serving branches from memory cache for key: ${cacheKey}`);
+    return branchCache[cacheKey];
   }
 
-  // Deduplicate and return
-  const names = new Set(data.map(b => b.branch_name));
-  return Array.from(names);
+  console.log(`🔍 Fetching branches from Supabase for exam: ${examId}, round: ${roundId || 'all'}`);
+
+  if (examId === 'josaa') {
+    // For JoSAA, we fetch directly from branches table (all JoSAA branch codes start with 'J')
+    // Since JoSAA has ~50,000 cutoff rows, querying cutoffs table directly would require 50+ paginated requests.
+    // Querying branches table by code prefix is fast and fits in a few queries.
+    const uniqueNames = new Set();
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('branch_name')
+        .like('branch_code', 'J%')
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error('❌ Supabase error fetching JoSAA branches:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        data.forEach(d => {
+          if (d.branch_name) uniqueNames.add(d.branch_name);
+        });
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+    }
+
+    const sortedBranches = Array.from(uniqueNames).sort();
+    branchCache[cacheKey] = sortedBranches;
+    return sortedBranches;
+  }
+
+  // For MHT-CET Engineering ('mhtcet') and Pharmacy ('pharma'), we query cutoffs to get exact active branch names.
+  // We paginate using range() to bypass the PostgREST 1000 rows default limit.
+  const uniqueNames = new Set();
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from('cutoffs')
+      .select('branches!inner(branch_name)')
+      .eq('exam_id', examId)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (roundId) {
+      query = query.eq('round_id', roundId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error(`❌ Supabase error fetching branches for ${examId}:`, error);
+      break;
+    }
+
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      data.forEach(row => {
+        if (row.branches && row.branches.branch_name) {
+          uniqueNames.add(row.branches.branch_name);
+        }
+      });
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+  }
+
+  const sortedBranches = Array.from(uniqueNames).sort();
+  branchCache[cacheKey] = sortedBranches;
+  return sortedBranches;
+}
+
+// Expose cache clearer
+function clearBranchCache() {
+  for (const key in branchCache) {
+    delete branchCache[key];
+  }
+  console.log('🗑️  Cleared unique branches memory cache');
 }
 
 /**
@@ -352,5 +439,6 @@ module.exports = {
   getUniqueBranches,
   getAllColleges,
   getCollegeTypes,
-  getRoundsMetadata
+  getRoundsMetadata,
+  clearBranchCache
 };
