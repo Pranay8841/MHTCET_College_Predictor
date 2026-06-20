@@ -247,10 +247,6 @@ async function parseCutoffPDF(pdfBuffer) {
       const newHeaders = splitCategoryHeaders(line);
       if (newHeaders.length > 0) {
         categoryHeaders = categoryHeaders.concat(newHeaders);
-      } else if (categoryHeaders.length > 0) {
-        // Unrecognized short string — might be a suffix for the last code
-        const lastCode = categoryHeaders[categoryHeaders.length - 1];
-        categoryHeaders[categoryHeaders.length - 1] = lastCode + line;
       }
       continue;
     }

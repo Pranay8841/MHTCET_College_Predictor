@@ -27,23 +27,27 @@ function ResultsPage() {
   const queryParams = useMemo(() => {
     const examId = searchParams.get('examId') || 'mhtcet';
     const isJosaa = examId === 'josaa';
+    const rank = searchParams.get('rank');
+    const percentile = searchParams.get('percentile');
+    const isRankSearch = isJosaa || (rank !== null && rank !== undefined && rank !== '');
     return {
       examId,
-      percentile: searchParams.get('percentile'),
-      rank: searchParams.get('rank'),
+      percentile,
+      rank,
       category: searchParams.get('category'),
       gender: searchParams.get('gender'),
       seatType: searchParams.get('seatType'),
       roundId: searchParams.get('roundId'),
       branch: searchParams.getAll('branch'),
       collegeType: searchParams.get('collegeType') || 'all',
-      isJosaa
+      isJosaa,
+      isRankSearch
     };
   }, [searchParams]);
 
   // Fetch predictions on mount
   useEffect(() => {
-    const score = queryParams.isJosaa ? queryParams.rank : queryParams.percentile;
+    const score = queryParams.isRankSearch ? queryParams.rank : queryParams.percentile;
     if (!score || !queryParams.roundId) return;
 
     const fetchAll = async () => {
@@ -104,15 +108,23 @@ function ResultsPage() {
     // Sort
     switch (filters.sort) {
       case 'cutoff-asc':
-        if (queryParams.isJosaa) {
-          result.sort((a, b) => (a.stage2MeritNo || 0) - (b.stage2MeritNo || 0));
+        if (queryParams.isRankSearch) {
+          if (queryParams.isJosaa) {
+            result.sort((a, b) => (a.stage2MeritNo || 0) - (b.stage2MeritNo || 0));
+          } else {
+            result.sort((a, b) => (a.cutoffMeritNo || 0) - (b.cutoffMeritNo || 0));
+          }
         } else {
           result.sort((a, b) => (a.cutoffPercentile || 0) - (b.cutoffPercentile || 0));
         }
         break;
       case 'cutoff-desc':
-        if (queryParams.isJosaa) {
-          result.sort((a, b) => (b.stage2MeritNo || 0) - (a.stage2MeritNo || 0));
+        if (queryParams.isRankSearch) {
+          if (queryParams.isJosaa) {
+            result.sort((a, b) => (b.stage2MeritNo || 0) - (a.stage2MeritNo || 0));
+          } else {
+            result.sort((a, b) => (b.cutoffMeritNo || 0) - (a.cutoffMeritNo || 0));
+          }
         } else {
           result.sort((a, b) => (b.cutoffPercentile || 0) - (a.cutoffPercentile || 0));
         }
@@ -125,18 +137,18 @@ function ResultsPage() {
         break;
       default: // chance-desc
         {
-          const chanceOrder = { High: 0, Medium: 1, Low: 2 };
+          const chanceOrder = { Low: 0, Medium: 1, High: 2 };
           result.sort((a, b) => {
             if (chanceOrder[a.chanceLabel] !== chanceOrder[b.chanceLabel]) {
               return chanceOrder[a.chanceLabel] - chanceOrder[b.chanceLabel];
             }
-            return b.percentileDiff - a.percentileDiff;
+            return a.percentileDiff - b.percentileDiff;
           });
         }
     }
 
     return result;
-  }, [allPredictions, filters, queryParams.isJosaa]);
+  }, [allPredictions, filters, queryParams.isJosaa, queryParams.isRankSearch]);
 
   // Group predictions by college name
   const groupedColleges = useMemo(() => {
@@ -182,51 +194,97 @@ function ResultsPage() {
         ? 'JoSAA College Predictor — Results'
         : queryParams.examId === 'pharma'
           ? 'MHT-CET Pharmacy College Predictor — Results'
-          : 'MHT-CET Engineering College Predictor — Results';
+          : queryParams.examId === 'nursing'
+            ? 'B.Sc. Nursing College Predictor — Results'
+            : queryParams.examId === 'agriculture'
+              ? 'MHT-CET Agriculture College Predictor — Results'
+              : 'MHT-CET Engineering College Predictor — Results';
       doc.setFontSize(16);
       doc.text(docTitle, 14, 15);
       doc.setFontSize(10);
       
-      const subInfo = queryParams.isJosaa
-        ? `JEE Rank: ${queryParams.rank} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? 'Female-Only' : 'Gender-Neutral'} | Quota: ${queryParams.seatType}`
+      const subInfo = queryParams.isRankSearch
+        ? `${queryParams.isJosaa ? 'JEE' : 'State Merit'} Rank: ${queryParams.rank} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? (queryParams.isJosaa ? 'Female-Only' : 'Female') : (queryParams.isJosaa ? 'Gender-Neutral' : 'Male')} | ${queryParams.isJosaa ? 'Quota' : 'Seat'}: ${queryParams.seatType}`
         : `Percentile: ${queryParams.percentile} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? 'Female' : 'Male'} | Seat: ${queryParams.seatType}`;
       
       doc.text(subInfo, 14, 22);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
 
       // Table data
-      let tableData, headers;
-      if (queryParams.isJosaa) {
-        headers = [['Code', 'College', 'Branch', 'Type', 'Quota', 'Category', 'Opening Rank', 'Closing Rank', 'Your Rank', 'Margin', 'Chance']];
-        tableData = filteredPredictions.map(p => [
-          p.collegeCode,
-          p.collegeName,
-          p.branchName,
-          p.collegeType || 'N/A',
-          p.seatBlockType,
-          p.category,
-          p.cutoffMeritNo || 'N/A',
-          p.stage2MeritNo || 'N/A',
-          p.studentRank || 'N/A',
-          p.percentileDiff >= 0 ? `+${p.percentileDiff}` : p.percentileDiff,
-          p.chanceLabel
-        ]);
+      let tableData = [], headers;
+
+      if (queryParams.isRankSearch) {
+        if (queryParams.isJosaa) {
+          headers = [['Code', 'Branch', 'Type', 'Quota', 'Category', 'Opening Rank', 'Closing Rank', 'Your Rank', 'Margin', 'Chance']];
+        } else {
+          headers = [['Code', 'Branch', 'Type', 'Category', 'Cutoff Rank', 'Your Rank', 'Margin', 'Cutoff %ile', 'Chance']];
+        }
       } else {
-        headers = [['Code', 'College', 'Branch', 'Type', 'Category', 'Cutoff %ile', 'Your %ile', 'Margin', 'Chance']];
-        tableData = filteredPredictions.map(p => [
-          p.collegeCode,
-          p.collegeName,
-          p.branchName,
-          p.collegeType || 'N/A',
-          p.category,
-          p.cutoffPercentile?.toFixed(2) || 'N/A',
-          p.studentPercentile?.toFixed(2) || 'N/A',
-          p.percentileDiff >= 0 ? `+${p.percentileDiff.toFixed(2)}` : p.percentileDiff.toFixed(2),
-          p.chanceLabel
-        ]);
+        headers = [['Code', 'Branch', 'Type', 'Category', 'Cutoff %ile', 'Your %ile', 'Margin', 'Chance']];
       }
 
-      const chanceColIndex = queryParams.isJosaa ? 10 : 8;
+      const totalCols = headers[0].length;
+
+      groupedColleges.forEach(group => {
+        // Find college properties from the first branch entry
+        const firstBranch = group.branches[0];
+        const typeInfo = firstBranch.collegeType || '';
+        const univInfo = firstBranch.homeUniversity ? ` | Home Univ: ${firstBranch.homeUniversity}` : '';
+
+        // Add spanned College Header Row
+        tableData.push([
+          {
+            content: `College: [Code: ${firstBranch.collegeCode}] ${group.collegeName} (${typeInfo}${univInfo})`,
+            colSpan: totalCols,
+            styles: { fillColor: [240, 244, 248], fontStyle: 'bold', fontSize: 7.5, textColor: [31, 41, 55] }
+          }
+        ]);
+
+        // Add each branch under this college (omitting repeated College Name column)
+        group.branches.forEach(p => {
+          if (queryParams.isRankSearch) {
+            if (queryParams.isJosaa) {
+              tableData.push([
+                p.collegeCode,
+                p.branchName,
+                p.collegeType || 'N/A',
+                p.seatBlockType,
+                p.category,
+                p.cutoffMeritNo || 'N/A',
+                p.stage2MeritNo || 'N/A',
+                p.studentRank || 'N/A',
+                p.percentileDiff >= 0 ? `+${p.percentileDiff}` : p.percentileDiff,
+                p.chanceLabel
+              ]);
+            } else {
+              tableData.push([
+                p.collegeCode,
+                p.branchName,
+                p.collegeType || 'N/A',
+                p.category,
+                p.cutoffMeritNo || 'N/A',
+                p.studentRank || 'N/A',
+                p.percentileDiff >= 0 ? `+${p.percentileDiff}` : p.percentileDiff,
+                p.cutoffPercentile?.toFixed(2) || 'N/A',
+                p.chanceLabel
+              ]);
+            }
+          } else {
+            tableData.push([
+              p.collegeCode,
+              p.branchName,
+              p.collegeType || 'N/A',
+              p.category,
+              p.cutoffPercentile?.toFixed(2) || 'N/A',
+              p.studentPercentile?.toFixed(2) || 'N/A',
+              p.percentileDiff >= 0 ? `+${p.percentileDiff.toFixed(2)}` : p.percentileDiff.toFixed(2),
+              p.chanceLabel
+            ]);
+          }
+        });
+      });
+
+      const chanceColIndex = headers[0].length - 1;
 
       doc.autoTable({
         startY: 34,
@@ -236,14 +294,12 @@ function ResultsPage() {
         headStyles: { fillColor: [255, 107, 43] },
         columnStyles: queryParams.isJosaa ? {
           0: { cellWidth: 15 },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 40 },
-          10: { cellWidth: 15 }
+          1: { cellWidth: 90 },
+          9: { cellWidth: 15 }
         } : {
           0: { cellWidth: 15 },
-          1: { cellWidth: 55 },
-          2: { cellWidth: 45 },
-          8: { cellWidth: 18 }
+          1: { cellWidth: 95 },
+          [headers[0].length - 1]: { cellWidth: 18 }
         },
         didParseCell: function (data) {
           if (data.column.index === chanceColIndex && data.section === 'body') {
@@ -259,15 +315,19 @@ function ResultsPage() {
         ? 'JoSAA'
         : queryParams.examId === 'pharma'
           ? 'MHTCET_Pharma'
-          : 'MHTCET_Engineering';
-      doc.save(`${filenamePrefix}_Predictions_${queryParams.isJosaa ? queryParams.rank : queryParams.percentile}.pdf`);
+          : queryParams.examId === 'nursing'
+            ? 'MHTCET_Nursing'
+            : queryParams.examId === 'agriculture'
+              ? 'MHTCET_Agriculture'
+              : 'MHTCET_Engineering';
+      doc.save(`${filenamePrefix}_Predictions_${queryParams.isRankSearch ? queryParams.rank : queryParams.percentile}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
       alert('Failed to generate PDF. Please try again.');
     }
   };
 
-  const score = queryParams.isJosaa ? queryParams.rank : queryParams.percentile;
+  const score = queryParams.isRankSearch ? queryParams.rank : queryParams.percentile;
 
   // No query params — redirect to home
   if (!score || !queryParams.roundId) {
@@ -315,17 +375,17 @@ function ResultsPage() {
           {loading ? 'Searching...' : `Found ${groupedColleges.length} Colleges`}
           {!loading && (
             <span className="badge badge-info" style={{ marginLeft: 'var(--space-3)', fontSize: 'var(--text-sm)', verticalAlign: 'middle' }}>
-              {queryParams.examId === 'pharma' ? 'MHT-CET Pharmacy' : queryParams.isJosaa ? 'JoSAA' : 'MHT-CET Engineering'}
+              {queryParams.examId === 'pharma' ? 'MHT-CET Pharmacy' : queryParams.examId === 'nursing' ? 'B.Sc. Nursing' : queryParams.examId === 'agriculture' ? 'MHT-CET Agriculture' : queryParams.isJosaa ? 'JoSAA' : 'MHT-CET Engineering'}
             </span>
           )}
         </h1>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-          {queryParams.isJosaa ? (
+          {queryParams.isRankSearch ? (
             <>
-              JEE Rank: <strong>{queryParams.rank}</strong> | 
-              Quota: <strong>{seatLabel}</strong> | 
+              {queryParams.isJosaa ? 'JEE' : 'State Merit'} Rank: <strong>{queryParams.rank}</strong> | 
+              {queryParams.isJosaa ? 'Quota' : 'Seat'}: <strong>{seatLabel}</strong> | 
               Category: <strong>{categoryLabel}</strong> | 
-              Gender/Pool: <strong>{queryParams.gender === 'L' ? 'Female-Only' : 'Gender-Neutral'}</strong>
+              Gender/Pool: <strong>{queryParams.gender === 'L' ? (queryParams.isJosaa ? 'Female-Only' : 'Female') : (queryParams.isJosaa ? 'Gender-Neutral' : 'Male')}</strong>
             </>
           ) : (
             <>
@@ -409,6 +469,7 @@ function ResultsPage() {
                   branches={group.branches}
                   index={(currentPage - 1) * COLLEGES_PER_PAGE + idx}
                   isJosaa={queryParams.isJosaa}
+                  isRankSearch={queryParams.isRankSearch}
                 />
               ))}
             </div>

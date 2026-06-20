@@ -53,10 +53,11 @@ router.get('/', async (req, res) => {
     let pct = null;
     let studentRank = null;
     const isJosaa = examId === 'josaa';
+    const isRankSearch = isJosaa || (rank !== undefined && rank !== null && rank !== '');
 
-    if (isJosaa) {
+    if (isRankSearch) {
       if (!rank) {
-        return res.status(400).json({ error: 'rank is required for JoSAA predictions' });
+        return res.status(400).json({ error: 'rank is required for rank-based predictions' });
       }
       studentRank = parseInt(rank, 10);
       if (isNaN(studentRank) || studentRank <= 0) {
@@ -64,7 +65,7 @@ router.get('/', async (req, res) => {
       }
     } else {
       if (!percentile) {
-        return res.status(400).json({ error: 'percentile is required for MHT-CET predictions' });
+        return res.status(400).json({ error: 'percentile is required for percentile-based predictions' });
       }
       pct = parseFloat(percentile);
       if (isNaN(pct) || pct < 0 || pct > 100) {
@@ -110,11 +111,18 @@ router.get('/', async (req, res) => {
       .eq('round_id', roundId)
       .in('category_code', categoryCodes);
 
-    if (isJosaa) {
-      // For JoSAA, query where closing rank (stage2_merit_no) is >= 85% of student rank (15% better)
-      query = query
-        .gte('stage2_merit_no', Math.floor(studentRank * 0.85))
-        .not('stage2_merit_no', 'is', null);
+    if (isRankSearch) {
+      if (isJosaa) {
+        // For JoSAA, query where closing rank (stage2_merit_no) is >= 85% of student rank (15% better)
+        query = query
+          .gte('stage2_merit_no', Math.floor(studentRank * 0.85))
+          .not('stage2_merit_no', 'is', null);
+      } else {
+        // For MHT-CET Rank search, query where merit rank (stage1_merit_no) is >= 85% of student rank (15% better)
+        query = query
+          .gte('stage1_merit_no', Math.floor(studentRank * 0.85))
+          .not('stage1_merit_no', 'is', null);
+      }
     } else {
       // For MHT-CET, query where cutoff percentile is <= student's percentile + 2.0
       query = query
@@ -149,10 +157,16 @@ router.get('/', async (req, res) => {
       let chance = 0;
       let margin = 0;
 
-      if (isJosaa) {
-        const cutoffRank = parseInt(row.stage2_merit_no, 10);
-        chance = calculateJosaaChance(studentRank, cutoffRank);
-        margin = cutoffRank - studentRank;
+      if (isRankSearch) {
+        if (isJosaa) {
+          const cutoffRank = parseInt(row.stage2_merit_no, 10);
+          chance = calculateJosaaChance(studentRank, cutoffRank);
+          margin = cutoffRank - studentRank;
+        } else {
+          const cutoffRank = parseInt(row.stage1_merit_no, 10);
+          chance = calculateJosaaChance(studentRank, cutoffRank);
+          margin = cutoffRank - studentRank;
+        }
       } else {
         const cutoffPct = parseFloat(row.stage1_percentile);
         chance = calculateChance(pct, cutoffPct);
@@ -161,6 +175,7 @@ router.get('/', async (req, res) => {
 
       if (chance > 0) {
         predictions.push({
+          examId,
           collegeCode: row.colleges.college_code,
           collegeName: row.colleges.college_name,
           collegeType: row.colleges.college_type,
@@ -169,27 +184,27 @@ router.get('/', async (req, res) => {
           branchName: row.branches.branch_name,
           seatBlockType: row.seat_block_type,
           category: row.category_code,
-          cutoffPercentile: isJosaa ? null : parseFloat(row.stage1_percentile),
+          cutoffPercentile: row.stage1_percentile ? parseFloat(row.stage1_percentile) : null,
           cutoffMeritNo: row.stage1_merit_no, // Opening Rank for JoSAA, merit rank for MHTCET
           stage2Percentile: row.stage2_percentile ? parseFloat(row.stage2_percentile) : null,
           stage2MeritNo: row.stage2_merit_no, // Closing Rank for JoSAA
           studentPercentile: pct,
           studentRank: studentRank,
-          percentileDiff: margin, // Stores rank difference for JoSAA, percentile difference for MHTCET
+          percentileDiff: margin, // Stores rank/percentile margin
           chance,
           chanceLabel: getChanceLabel(chance)
         });
       }
     });
 
-    // Sort: High > Medium > Low, then by difference/margin descending
+    // Sort: Low > Medium > High, then by difference/margin ascending
     predictions.sort((a, b) => {
-      const chanceOrder = { High: 0, Medium: 1, Low: 2 };
+      const chanceOrder = { Low: 0, Medium: 1, High: 2 };
       if (chanceOrder[a.chanceLabel] !== chanceOrder[b.chanceLabel]) {
         return chanceOrder[a.chanceLabel] - chanceOrder[b.chanceLabel];
       }
-      // Within same chance level, sort by percentile diff descending (most margin first)
-      return b.percentileDiff - a.percentileDiff;
+      // Within same chance level, sort by percentile diff ascending (worse first)
+      return a.percentileDiff - b.percentileDiff;
     });
 
     // Pagination

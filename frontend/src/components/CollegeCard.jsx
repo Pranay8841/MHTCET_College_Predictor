@@ -2,10 +2,11 @@ import React from 'react';
 import { getChanceDisplay } from '../utils/categoryOptions';
 
 function CollegeCard({ prediction, index }) {
-  const isJosaa = prediction.studentRank !== null && prediction.studentRank !== undefined;
+  const isJosaa = prediction.examId === 'josaa';
+  const isRankSearch = prediction.studentRank !== null && prediction.studentRank !== undefined;
   const chance = getChanceDisplay(prediction.chanceLabel);
   const diff = prediction.percentileDiff;
-  const diffFormatted = isJosaa
+  const diffFormatted = isRankSearch
     ? (diff >= 0 ? `+${diff}` : `${diff}`)
     : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
 
@@ -48,15 +49,17 @@ function CollegeCard({ prediction, index }) {
       {/* Cutoff Data */}
       <div className="college-cutoff-row">
         <div className="cutoff-item">
-          <div className="cutoff-label">{isJosaa ? 'Closing Rank' : 'Cutoff'}</div>
+          <div className="cutoff-label">{isRankSearch ? (isJosaa ? 'Closing Rank' : 'Cutoff Rank') : 'Cutoff'}</div>
           <div className="cutoff-value" style={{ color: 'var(--color-text-primary)' }}>
-            {isJosaa ? prediction.stage2MeritNo : (prediction.cutoffPercentile?.toFixed(2) ?? 'N/A')}
+            {isRankSearch 
+              ? (isJosaa ? prediction.stage2MeritNo : prediction.cutoffMeritNo) 
+              : (prediction.cutoffPercentile?.toFixed(2) ?? 'N/A')}
           </div>
         </div>
         <div className="cutoff-item">
-          <div className="cutoff-label">{isJosaa ? 'Your Rank' : 'Your %ile'}</div>
+          <div className="cutoff-label">{isRankSearch ? 'Your Rank' : 'Your %ile'}</div>
           <div className="cutoff-value" style={{ color: 'var(--color-accent-light)' }}>
-            {isJosaa ? prediction.studentRank : prediction.studentPercentile?.toFixed(2)}
+            {isRankSearch ? prediction.studentRank : prediction.studentPercentile?.toFixed(2)}
           </div>
         </div>
         <div className="cutoff-item">
@@ -83,7 +86,7 @@ function CollegeCard({ prediction, index }) {
           </div>
         )
       ) : (
-        prediction.stage2Percentile && (
+        (isRankSearch ? prediction.cutoffPercentile : prediction.cutoffMeritNo) ? (
           <div style={{
             marginTop: 'var(--space-3)',
             paddingTop: 'var(--space-3)',
@@ -93,10 +96,18 @@ function CollegeCard({ prediction, index }) {
             display: 'flex',
             justifyContent: 'space-between'
           }}>
-            <span>Stage II Cutoff: {prediction.stage2Percentile?.toFixed(2)}</span>
-            <span>Merit: #{prediction.cutoffMeritNo || 'N/A'}</span>
+            {isRankSearch ? (
+              <>
+                <span>Cutoff Percentile: {prediction.cutoffPercentile?.toFixed(2)}%ile</span>
+              </>
+            ) : (
+              <>
+                {prediction.stage2Percentile && <span>Stage II Cutoff: {prediction.stage2Percentile?.toFixed(2)}%ile</span>}
+                <span>Merit: #{prediction.cutoffMeritNo || 'N/A'}</span>
+              </>
+            )}
           </div>
-        )
+        ) : null
       )}
     </div>
   );

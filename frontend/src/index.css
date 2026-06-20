@@ -429,6 +429,17 @@ img {
   outline: none;
 }
 
+/* Remove number input spin buttons */
+.form-input[type="number"]::-webkit-outer-spin-button,
+.form-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .form-input:focus,
 .form-select:focus {
   background: var(--color-bg-input-focus);
@@ -465,7 +476,8 @@ img {
 
 /* Radio Group */
 .radio-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
 }
 
@@ -514,6 +526,7 @@ img {
   padding: var(--space-4) !important;
   min-height: 84px !important;
   text-align: center;
+  white-space: normal !important;
 }
 
 .radio-card strong {
@@ -1346,7 +1359,7 @@ img {
 
   /* Form Elements */
   .radio-group {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: var(--space-2);
   }
   .radio-option label {

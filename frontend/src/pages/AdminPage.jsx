@@ -175,6 +175,8 @@ function AdminPage() {
               >
                 <option value="mhtcet">MHT-CET Engineering (PDF)</option>
                 <option value="pharma">MHT-CET Pharmacy (PDF)</option>
+                <option value="nursing">B.Sc. Nursing (PDF)</option>
+                <option value="agriculture">MHT-CET Agriculture (PDF)</option>
                 <option value="josaa">JoSAA (IIT/NIT) (HTML)</option>
               </select>
             </div>
@@ -325,7 +327,7 @@ function AdminPage() {
                   <span className="round-name">{round.roundName || id}</span>
                   <span className="round-meta">
                     Year: {round.year || 'N/A'} • 
-                    Exam: {id.toLowerCase().includes('pharma') ? 'MHT-CET Pharma' : id.toLowerCase().includes('josaa') ? 'JoSAA' : 'MHT-CET Engineering'} • 
+                    Exam: {id.toLowerCase().includes('pharma') ? 'MHT-CET Pharma' : id.toLowerCase().includes('nursing') ? 'B.Sc. Nursing' : id.toLowerCase().includes('agriculture') ? 'MHT-CET Agriculture' : id.toLowerCase().includes('josaa') ? 'JoSAA' : 'MHT-CET Engineering'} • 
                     {round.totalColleges ? ` ${round.totalColleges} colleges` : ''} • 
                     {round.totalBranches ? ` ${round.totalBranches} branches` : ''}
                   </span>

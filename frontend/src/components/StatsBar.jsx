@@ -5,16 +5,16 @@ function StatsBar({ stats, total }) {
 
   const items = [
     {
-      label: 'Total Colleges',
+      label: 'Total Choices',
       value: total,
       color: 'var(--color-accent)',
-      icon: '🏫'
+      icon: '📋'
     },
     {
-      label: 'High Chance',
-      value: stats.high || 0,
-      color: 'var(--color-chance-high)',
-      icon: '🟢'
+      label: 'Low Chance',
+      value: stats.low || 0,
+      color: 'var(--color-chance-low)',
+      icon: '🔴'
     },
     {
       label: 'Medium Chance',
@@ -23,10 +23,10 @@ function StatsBar({ stats, total }) {
       icon: '🟡'
     },
     {
-      label: 'Low Chance',
-      value: stats.low || 0,
-      color: 'var(--color-chance-low)',
-      icon: '🔴'
+      label: 'High Chance',
+      value: stats.high || 0,
+      color: 'var(--color-chance-high)',
+      icon: '🟢'
     }
   ];
 

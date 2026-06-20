@@ -12,7 +12,7 @@ function HomePage() {
           </div>
           <h1 className="hero-title">
             Find Your Perfect<br />
-            <span className="gradient-text">Engineering &amp; Pharmacy College</span>
+            <span className="gradient-text">Engineering, Pharmacy, Nursing &amp; Agriculture College</span>
           </h1>
           <p className="hero-subtitle">
             Enter your MHT-CET percentile and preferences below. We'll instantly show you

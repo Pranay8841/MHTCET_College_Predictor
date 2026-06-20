@@ -110,6 +110,14 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
       console.log(`\n⏳ Parsing HTML...`);
       const { parseJosaaHTML } = require('../services/josaaParser');
       parsedData = parseJosaaHTML(req.file.buffer.toString('utf-8'));
+    } else if (actualExamId === 'nursing') {
+      console.log(`\n⏳ Parsing Nursing PDF...`);
+      const { parseNursingPDF } = require('../services/nursingParser');
+      parsedData = await parseNursingPDF(req.file.buffer);
+    } else if (actualExamId === 'agriculture') {
+      console.log(`\n⏳ Parsing Agriculture PDF...`);
+      const { parseAgriculturePDF } = require('../services/agricultureParser');
+      parsedData = await parseAgriculturePDF(req.file.buffer);
     } else {
       console.log(`\n⏳ Parsing PDF...`);
       parsedData = await parseCutoffPDF(req.file.buffer);

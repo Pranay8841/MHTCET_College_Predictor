@@ -5,7 +5,7 @@ import { getChanceDisplay } from '../utils/categoryOptions';
  * CollegeGroup renders a single college with all its matching branches
  * in a table format, similar to the reference image layout.
  */
-function CollegeGroup({ college, branches, index, isJosaa }) {
+function CollegeGroup({ college, branches, index, isJosaa, isRankSearch }) {
   const [expanded, setExpanded] = useState(true);
 
   // Determine best chance among all branches for the header badge
@@ -58,12 +58,20 @@ function CollegeGroup({ college, branches, index, isJosaa }) {
                 <tr>
                   <th>Branch</th>
                   {isJosaa && <th>Quota</th>}
-                  {isJosaa ? (
-                    <>
-                      <th>Opening Rank</th>
-                      <th>Closing Rank</th>
-                      <th>Your Rank</th>
-                    </>
+                  {isRankSearch ? (
+                    isJosaa ? (
+                      <>
+                        <th>Opening Rank</th>
+                        <th>Closing Rank</th>
+                        <th>Your Rank</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>Cutoff Rank</th>
+                        <th>Your Rank</th>
+                        <th>Cutoff %ile</th>
+                      </>
+                    )
                   ) : (
                     <>
                       <th>Cutoff %ile</th>
@@ -78,7 +86,8 @@ function CollegeGroup({ college, branches, index, isJosaa }) {
                 {branches.map((prediction, bIdx) => {
                   const chance = getChanceDisplay(prediction.chanceLabel);
                   const diff = prediction.percentileDiff;
-                  const diffFormatted = isJosaa
+                  const isRankDiff = isJosaa || isRankSearch;
+                  const diffFormatted = isRankDiff
                     ? (diff >= 0 ? `+${diff}` : `${diff}`)
                     : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
 
@@ -92,12 +101,20 @@ function CollegeGroup({ college, branches, index, isJosaa }) {
                           <span className="meta-tag small">{prediction.seatBlockType}</span>
                         </td>
                       )}
-                      {isJosaa ? (
-                        <>
-                          <td className="number-cell">{prediction.cutoffMeritNo || '—'}</td>
-                          <td className="number-cell">{prediction.stage2MeritNo || '—'}</td>
-                          <td className="number-cell highlight">{prediction.studentRank || '—'}</td>
-                        </>
+                      {isRankSearch ? (
+                        isJosaa ? (
+                          <>
+                            <td className="number-cell">{prediction.cutoffMeritNo || '—'}</td>
+                            <td className="number-cell">{prediction.stage2MeritNo || '—'}</td>
+                            <td className="number-cell highlight">{prediction.studentRank || '—'}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="number-cell">{prediction.cutoffMeritNo || '—'}</td>
+                            <td className="number-cell highlight">{prediction.studentRank || '—'}</td>
+                            <td className="number-cell">{prediction.cutoffPercentile?.toFixed(2) ?? '—'}</td>
+                          </>
+                        )
                       ) : (
                         <>
                           <td className="number-cell">{prediction.cutoffPercentile?.toFixed(2) ?? '—'}</td>

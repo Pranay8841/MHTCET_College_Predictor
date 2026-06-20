@@ -25,6 +25,8 @@ function PredictorForm() {
     collegeType: 'all'
   });
 
+  const [predictBy, setPredictBy] = useState('percentile'); // 'percentile' or 'rank'
+
   const { roundsList, branches, loading: loadingData } = useColleges(formData.examId, formData.roundId);
 
   const [errors, setErrors] = useState({});
@@ -50,14 +52,19 @@ function PredictorForm() {
       collegeType: 'all'
     });
     setErrors({});
+    if (newExamId === 'josaa') {
+      setPredictBy('rank');
+    } else {
+      setPredictBy('percentile');
+    }
   };
 
   const validate = () => {
     const newErrors = {};
 
-    if (formData.examId === 'josaa') {
+    if (formData.examId === 'josaa' || predictBy === 'rank') {
       if (!formData.rank) {
-        newErrors.rank = 'Please enter your JEE rank';
+        newErrors.rank = formData.examId === 'josaa' ? 'Please enter your JEE rank' : 'Please enter your state merit rank';
       } else {
         const rk = parseInt(formData.rank, 10);
         if (isNaN(rk) || rk <= 0) {
@@ -97,7 +104,7 @@ function PredictorForm() {
       collegeType: formData.collegeType
     });
 
-    if (formData.examId === 'josaa') {
+    if (formData.examId === 'josaa' || predictBy === 'rank') {
       params.set('rank', formData.rank);
     } else {
       params.set('percentile', formData.percentile);
@@ -122,20 +129,26 @@ function PredictorForm() {
     const nameLower = (r.roundName || '').toLowerCase();
     const isJosaaRound = idLower.includes('josaa') || nameLower.includes('josaa');
     const isPharmaRound = idLower.includes('pharma') || nameLower.includes('pharma');
+    const isNursingRound = idLower.includes('nursing') || nameLower.includes('nursing');
+    const isAgricultureRound = idLower.includes('agriculture') || nameLower.includes('agriculture');
     
     if (formData.examId === 'pharma') {
       return isPharmaRound;
+    } else if (formData.examId === 'nursing') {
+      return isNursingRound;
+    } else if (formData.examId === 'agriculture') {
+      return isAgricultureRound;
     } else if (formData.examId === 'josaa') {
       return isJosaaRound;
     } else {
-      // Default to MHT-CET Engineering (neither josaa nor pharma)
-      return !isJosaaRound && !isPharmaRound;
+      // Default to MHT-CET Engineering (neither josaa nor pharma nor nursing nor agriculture)
+      return !isJosaaRound && !isPharmaRound && !isNursingRound && !isAgricultureRound;
     }
   });
 
   const roundOptions = filteredRoundsList.length > 0
     ? filteredRoundsList.map(r => ({ value: r.id, label: `${r.roundName} (${r.year})` }))
-    : [{ value: '', label: `No rounds available for ${formData.examId === 'pharma' ? 'MHT-CET Pharmacy' : formData.examId === 'josaa' ? 'JoSAA' : 'MHT-CET Engineering'}` }];
+    : [{ value: '', label: `No rounds available for ${formData.examId === 'pharma' ? 'MHT-CET Pharmacy' : formData.examId === 'nursing' ? 'B.Sc. Nursing' : formData.examId === 'agriculture' ? 'MHT-CET Agriculture' : formData.examId === 'josaa' ? 'JoSAA' : 'MHT-CET Engineering'}` }];
 
   const categoryOptionsList = formData.examId === 'josaa' ? JOSAA_CATEGORY_OPTIONS : CATEGORY_OPTIONS;
   const seatTypeOptionsList = formData.examId === 'josaa' ? JOSAA_SEAT_TYPE_OPTIONS : SEAT_TYPE_OPTIONS;
@@ -185,13 +198,46 @@ function PredictorForm() {
                 <span>B.Pharmacy & Pharm D (%ile)</span>
               </label>
             </div>
+            <div className="radio-option">
+              <input
+                type="radio"
+                name="examId"
+                id="exam-nursing"
+                value="nursing"
+                checked={formData.examId === 'nursing'}
+                onChange={() => handleExamChange('nursing')}
+              />
+              <label htmlFor="exam-nursing" className="radio-card">
+                <strong>B.Sc. Nursing</strong>
+                <span>Nursing Cutoffs (%ile)</span>
+              </label>
+            </div>
+            <div className="radio-option">
+              <input
+                type="radio"
+                name="examId"
+                id="exam-agriculture"
+                value="agriculture"
+                checked={formData.examId === 'agriculture'}
+                onChange={() => handleExamChange('agriculture')}
+              />
+              <label htmlFor="exam-agriculture" className="radio-card">
+                <strong>MHT-CET Agriculture</strong>
+                <span>Agri, Horti &amp; Forestry (%ile)</span>
+              </label>
+            </div>
           </div>
         </div>
 
         {/* Score/Rank Input */}
-        {formData.examId === 'josaa' ? (
-          <div className="form-group">
-            <label className="form-label" htmlFor="rank">Your JEE Rank *</label>
+        <div className="form-group">
+          <label className="form-label" htmlFor={predictBy === 'percentile' ? 'percentile' : 'rank'}>
+            {formData.examId === 'josaa' 
+              ? 'Your JEE Rank *' 
+              : 'Enter Score / Rank *'}
+          </label>
+          
+          {formData.examId === 'josaa' ? (
             <div className="form-input-group">
               <input
                 type="number"
@@ -204,36 +250,72 @@ function PredictorForm() {
               />
               <span className="form-input-suffix">Rank</span>
             </div>
-            {errors.rank && (
-              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
-                {errors.rank}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="form-group">
-            <label className="form-label" htmlFor="percentile">Your Percentile *</label>
-            <div className="form-input-group">
-              <input
-                type="number"
-                id="percentile"
-                className="form-input"
-                placeholder="e.g. 88.5013"
-                step="0.0001"
-                min="0"
-                max="100"
-                value={formData.percentile}
-                onChange={e => handleChange('percentile', e.target.value)}
-              />
-              <span className="form-input-suffix">%ile</span>
+          ) : (
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <select
+                className="form-select"
+                style={{ width: '135px', flexShrink: 0 }}
+                value={predictBy}
+                onChange={e => {
+                  setPredictBy(e.target.value);
+                  if (e.target.value === 'percentile') {
+                    handleChange('rank', '');
+                  } else {
+                    handleChange('percentile', '');
+                  }
+                }}
+              >
+                <option value="percentile">Percentile</option>
+                <option value="rank">State Rank</option>
+              </select>
+              <div className="form-input-group" style={{ flex: 1 }}>
+                {predictBy === 'percentile' ? (
+                  <>
+                    <input
+                      type="number"
+                      id="percentile"
+                      className="form-input"
+                      placeholder="e.g. 88.5013"
+                      step="0.0001"
+                      min="0"
+                      max="100"
+                      value={formData.percentile}
+                      onChange={e => handleChange('percentile', e.target.value)}
+                    />
+                    <span className="form-input-suffix">%ile</span>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="number"
+                      id="rank"
+                      className="form-input"
+                      placeholder="e.g. 5240"
+                      min="1"
+                      value={formData.rank}
+                      onChange={e => handleChange('rank', e.target.value)}
+                    />
+                    <span className="form-input-suffix">Rank</span>
+                  </>
+                )}
+              </div>
             </div>
-            {errors.percentile && (
-              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+          )}
+
+          {predictBy === 'percentile' && formData.examId !== 'josaa' ? (
+            errors.percentile && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', marginTop: '2px' }}>
                 {errors.percentile}
               </span>
-            )}
-          </div>
-        )}
+            )
+          ) : (
+            errors.rank && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', marginTop: '2px' }}>
+                {errors.rank}
+              </span>
+            )
+          )}
+        </div>
 
         {/* Round Selection */}
         <div className="form-group">

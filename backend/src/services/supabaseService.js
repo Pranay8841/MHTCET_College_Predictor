@@ -1,5 +1,29 @@
 const { supabase } = require('../supabaseClient');
 
+// Automatically ensure required exam definitions exist in the database
+(async () => {
+  if (supabase) {
+    try {
+      const examsToRegister = [
+        { id: 'pharma', name: 'MHT-CET Pharmacy', type: 'percentile' },
+        { id: 'nursing', name: 'B.Sc. Nursing', type: 'percentile' },
+        { id: 'agriculture', name: 'MHT-CET Agriculture', type: 'percentile' }
+      ];
+      const { error } = await supabase
+        .from('exams')
+        .upsert(examsToRegister, { onConflict: 'id' });
+        
+      if (error) {
+        console.error('⚠️  Failed to auto-register exams in DB:', error.message);
+      } else {
+        console.log('✅ Exams auto-registered/synced in database');
+      }
+    } catch (err) {
+      console.error('⚠️  Error running exam auto-registration:', err.message);
+    }
+  }
+})();
+
 /**
  * Save parsed cutoff data to Supabase.
  * In Postgres, we store this in a flat format for high-speed indexing and querying.
@@ -53,11 +77,15 @@ async function saveCutoffsToSupabase(parsedData, roundId, year, examId = 'mhtcet
               branch_code: entry.branchCode,
               seat_block_type: block.seatBlockType,
               category_code: catCode,
-              stage1_merit_no: catData.stage1MeritNo || null,
+              stage1_merit_no: catData.stage1MeritNo !== null && catData.stage1MeritNo !== undefined 
+                ? Math.round(parseFloat(catData.stage1MeritNo)) 
+                : null,
               stage1_percentile: catData.stage1Percentile !== null && catData.stage1Percentile !== undefined 
                 ? parseFloat(catData.stage1Percentile) 
                 : null,
-              stage2_merit_no: catData.stage2MeritNo || null,
+              stage2_merit_no: catData.stage2MeritNo !== null && catData.stage2MeritNo !== undefined 
+                ? Math.round(parseFloat(catData.stage2MeritNo)) 
+                : null,
               stage2_percentile: catData.stage2Percentile !== null && catData.stage2Percentile !== undefined 
                 ? parseFloat(catData.stage2Percentile) 
                 : null,

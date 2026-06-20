@@ -46,7 +46,7 @@ export const JOSAA_COLLEGE_TYPE_OPTIONS = [
 ];
 
 export const SORT_OPTIONS = [
-  { value: 'chance-desc', label: 'Best Chance First' },
+  { value: 'chance-desc', label: 'Low to High Chance' },
   { value: 'cutoff-asc', label: 'Cutoff: Low → High' },
   { value: 'cutoff-desc', label: 'Cutoff: High → Low' },
   { value: 'name-asc', label: 'College Name: A → Z' },
