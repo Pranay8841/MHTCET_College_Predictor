@@ -8,11 +8,11 @@ function HomePage() {
       <section className="hero">
         <div className="container">
           <div className="hero-badge">
-            ✨ Free &amp; No Login Required — 2024-25 Data Available
+            ✨ Transforming Navodayan’s Pathway to Professional Colleges | MHT-CET 2026
           </div>
           <h1 className="hero-title">
             Find Your Perfect<br />
-            <span className="gradient-text">Engineering &amp; Pharmacy College</span>
+            <span className="gradient-text">Engineering, Pharmacy, Nursing and Agriculture College</span>
           </h1>
           <p className="hero-subtitle">
             Enter your MHT-CET percentile and preferences below. We'll instantly show you

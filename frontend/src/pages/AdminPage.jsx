@@ -12,13 +12,13 @@ function AdminPage() {
   const [uploadMessage, setUploadMessage] = useState('');
   const [rounds, setRounds] = useState({});
   const [dragOver, setDragOver] = useState(false);
-  const [adminSecret, setAdminSecretState] = useState(() => localStorage.getItem('adminSecret') || '');
+  const [adminSecret, setAdminSecret] = useState('');
   const fileInputRef = useRef(null);
 
-  const setAdminSecret = (val) => {
-    setAdminSecretState(val);
-    localStorage.setItem('adminSecret', val);
-  };
+  // Clear any legacy saved adminSecret from localStorage on mount
+  useEffect(() => {
+    localStorage.removeItem('adminSecret');
+  }, []);
 
   // Load existing rounds
   const loadRounds = useCallback(async () => {
