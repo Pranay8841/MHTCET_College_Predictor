@@ -4,16 +4,99 @@ import { getChanceDisplay } from '../utils/categoryOptions';
 import { fetchCollegeCutoffs } from '../utils/api';
 
 /**
+ * Sparkline component to draw dynamic SVG line trends for cutoff changes.
+ */
+function Sparkline({ data, isRank }) {
+  if (!data || data.length < 2) return <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>—</span>;
+
+  // Filter out rounds with no cutoff data
+  const validData = data.filter(d => d.value !== null && d.value !== undefined);
+  if (validData.length < 2) return <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>—</span>;
+
+  const plotValues = isRank ? validData.map(d => -d.value) : validData.map(d => d.value);
+
+  const min = Math.min(...plotValues);
+  const max = Math.max(...plotValues);
+  const range = max - min === 0 ? 1 : max - min;
+
+  const width = 60;
+  const height = 18;
+  const padding = 3;
+  const svgPoints = plotValues.map((p, idx) => {
+    const x = padding + (idx / (plotValues.length - 1)) * (width - 2 * padding);
+    const y = padding + (1 - (p - min) / range) * (height - 2 * padding);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="sparkline-wrapper">
+      <svg width={width} height={height} className="sparkline">
+        <polyline
+          fill="none"
+          stroke="rgba(255, 255, 255, 0.2)"
+          strokeWidth="1.5"
+          strokeDasharray="2,2"
+          points={`${padding},${height/2} ${width-padding},${height/2}`}
+        />
+        <polyline
+          fill="none"
+          stroke="var(--color-primary-light)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={svgPoints}
+        />
+        {plotValues.map((p, idx) => {
+          const x = padding + (idx / (plotValues.length - 1)) * (width - 2 * padding);
+          const y = padding + (1 - (p - min) / range) * (height - 2 * padding);
+          
+          // CAP Round specific color-coding:
+          // CAP Round I: Blue (#3b82f6)
+          // CAP Round II: Saffron/Orange (#ff6b2b)
+          // CAP Round III: Purple (#a78bfa)
+          // CAP Round IV: Green (#10b981)
+          const colors = ['#3b82f6', '#ff6b2b', '#a78bfa', '#10b981'];
+          const pointColor = colors[idx % colors.length];
+
+          const item = validData[idx];
+          const displayVal = isRank ? item.value : item.value.toFixed(2);
+
+          return (
+            <circle
+              key={idx}
+              cx={x}
+              cy={y}
+              r="3.5"
+              fill={pointColor}
+              stroke="#0a0e1a"
+              strokeWidth="1.5"
+              style={{ transition: 'r 0.1s ease', cursor: 'pointer' }}
+            >
+              <title>{item.roundName}: {displayVal}</title>
+            </circle>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/**
  * CollegeGroup renders a single college with all its matching branches
  * in a table format, similar to the reference image layout.
  */
 function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryParams }) {
   const [expanded, setExpanded] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState(null); // 'cutoff', 'comparison', or null
   const [loadingCutoffs, setLoadingCutoffs] = useState(false);
   const [cutoffData, setCutoffData] = useState([]);
+  const [rounds, setRounds] = useState([]);
+  const [multiRoundData, setMultiRoundData] = useState([]);
   const [modalError, setModalError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+
+  const parsedPercentile = queryParams?.percentile ? parseFloat(queryParams.percentile) : null;
+  const studentPercentileFormatted = (parsedPercentile !== null && !isNaN(parsedPercentile)) ? parsedPercentile.toFixed(2) : '—';
 
   const triggerToast = (message) => {
     setToastMessage(message);
@@ -22,8 +105,8 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
     }, 3000);
   };
 
-  const handleOpenCutoffModal = async () => {
-    setShowModal(true);
+  const handleOpenModal = async (type) => {
+    setModalType(type);
     setLoadingCutoffs(true);
     setModalError('');
     try {
@@ -38,6 +121,8 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
       };
       const response = await fetchCollegeCutoffs(collegeCode, params);
       setCutoffData(response.cutoffs || []);
+      setRounds(response.rounds || []);
+      setMultiRoundData(response.multiRoundData || []);
     } catch (err) {
       console.error('Failed to load branch cutoffs:', err);
       setModalError(err.response?.data?.error || err.message || 'Failed to load branch cutoffs');
@@ -102,10 +187,19 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
           className="btn-action btn-cutoff"
           onClick={(e) => {
             e.stopPropagation();
-            handleOpenCutoffModal();
+            handleOpenModal('cutoff');
           }}
         >
           📄 <span className="btn-text-desktop">See </span>Cutoff
+        </button>
+        <button
+          className="btn-action btn-comparison"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenModal('comparison');
+          }}
+        >
+          📈 <span className="btn-text-desktop">See </span>Comparison
         </button>
         <button
           className="btn-action btn-fees"
@@ -208,20 +302,22 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
       )}
 
       {/* Modal Overlay */}
-      {showModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+      {modalType && createPortal(
+        <div className="modal-overlay" onClick={() => setModalType(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">{college}</h3>
+                <h3 className="modal-title">
+                  {college} {modalType === 'comparison' ? '— Round-wise Comparison' : '— Cutoffs'}
+                </h3>
                 <div className="modal-subtitle">
                   <span>🏛️ {collegeType}</span>
                   <span style={{ marginLeft: 'var(--space-3)' }}>🔢 Code: {collegeCode}</span>
                 </div>
               </div>
-              <button className="modal-close-btn" onClick={() => setShowModal(false)} aria-label="Close modal">✕</button>
+              <button className="modal-close-btn" onClick={() => setModalType(null)} aria-label="Close modal">✕</button>
             </div>
-            
+
             <div className="modal-body">
               {loadingCutoffs ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12)' }}>
@@ -233,95 +329,275 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                   <div className="empty-state-icon">❌</div>
                   <h4 style={{ color: 'var(--color-text-primary)', marginBottom: 'var(--space-2)' }}>Failed to load cutoffs</h4>
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', marginBottom: 'var(--space-4)' }}>{modalError}</p>
-                  <button className="btn btn-secondary btn-sm" onClick={handleOpenCutoffModal}>🔄 Retry</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenModal(modalType)}>🔄 Retry</button>
                 </div>
-              ) : cutoffData.length === 0 ? (
+              ) : (modalType === 'cutoff' ? cutoffData.length === 0 : multiRoundData.length === 0) ? (
                 <div className="empty-state" style={{ padding: 'var(--space-8) 0' }}>
                   <div className="empty-state-icon">🔍</div>
                   <h4 style={{ color: 'var(--color-text-primary)' }}>No Cutoff Records Found</h4>
                   <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-                    No branch cutoffs match the category/seat type profile in this round.
+                    No branch cutoffs match the category/seat type profile.
                   </p>
                 </div>
               ) : (
-                <>
-                  {/* Desktop Table View */}
-                  <div className="college-table-wrapper">
+                modalType === 'cutoff' ? (
+                  <>
+                    <div className="college-table-wrapper">
+                      <table className="college-table">
+                        <thead>
+                          <tr>
+                            <th>Branch</th>
+                            {isJosaa && <th>Quota</th>}
+                            {isRankSearch ? (
+                              isJosaa ? (
+                                <>
+                                  <th>Opening Rank</th>
+                                  <th>Closing Rank</th>
+                                  <th>Your Rank</th>
+                                </>
+                              ) : (
+                                <>
+                                  <th>Cutoff Rank</th>
+                                  <th>Your Rank</th>
+                                  <th>Cutoff %ile</th>
+                                </>
+                              )
+                            ) : (
+                              <>
+                                <th>Cutoff %ile</th>
+                                <th>Your %ile</th>
+                              </>
+                            )}
+                            <th>Margin</th>
+                            <th>Chance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cutoffData.map((cutoff, cIdx) => {
+                            const chance = getChanceDisplay(cutoff.chanceLabel);
+                            const diff = cutoff.percentileDiff;
+                            const isRankDiff = isJosaa || isRankSearch;
+                            const diffFormatted = isRankDiff
+                              ? (diff >= 0 ? `+${diff}` : `${diff}`)
+                              : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
+                            
+                            return (
+                              <tr key={`${cutoff.branchCode}-${cIdx}`}>
+                                <td className="branch-cell">
+                                  <span className="branch-name">{cutoff.branchName}</span>
+                                </td>
+                                {isJosaa && (
+                                  <td>
+                                    <span className="meta-tag small">{cutoff.seatBlockType}</span>
+                                  </td>
+                                )}
+                                {isRankSearch ? (
+                                  isJosaa ? (
+                                    <>
+                                      <td className="number-cell">{cutoff.cutoffMeritNo || '—'}</td>
+                                      <td className="number-cell">{cutoff.stage2MeritNo || '—'}</td>
+                                      <td className="number-cell highlight">{queryParams?.rank || '—'}</td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className="number-cell">{cutoff.cutoffMeritNo || '—'}</td>
+                                      <td className="number-cell highlight">{queryParams?.rank || '—'}</td>
+                                      <td className="number-cell">{cutoff.cutoffPercentile?.toFixed(2) ?? '—'}</td>
+                                    </>
+                                  )
+                                ) : (
+                                  <>
+                                    <td className="number-cell">{cutoff.cutoffPercentile?.toFixed(2) ?? '—'}</td>
+                                    <td className="number-cell highlight">{studentPercentileFormatted}</td>
+                                  </>
+                                )}
+                                <td className={`number-cell ${diff >= 0 ? 'positive' : 'negative'}`}>
+                                  {diffFormatted}
+                                </td>
+                                <td>
+                                  <span className={`badge badge-sm ${chance.className}`}>
+                                    {chance.emoji} {cutoff.chanceLabel}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="mobile-cutoff-list">
+                      {cutoffData.map((cutoff, cIdx) => {
+                        const chance = getChanceDisplay(cutoff.chanceLabel);
+                        const diff = cutoff.percentileDiff;
+                        const isRankDiff = isJosaa || isRankSearch;
+                        const diffFormatted = isRankDiff
+                          ? (diff >= 0 ? `+${diff}` : `${diff}`)
+                          : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
+                        
+                        return (
+                          <div key={`${cutoff.branchCode}-${cIdx}`} className="mobile-cutoff-card">
+                            <div className="mobile-cutoff-card-header">
+                              <span className="mobile-branch-name">{cutoff.branchName}</span>
+                              <span className={`badge badge-sm ${chance.className}`} style={{ marginLeft: 'var(--space-2)' }}>
+                                {chance.emoji} {cutoff.chanceLabel}
+                              </span>
+                            </div>
+
+                            {isJosaa && (
+                              <div style={{ marginBottom: 'var(--space-2)' }}>
+                                <span className="meta-tag small">{cutoff.seatBlockType}</span>
+                              </div>
+                            )}
+
+                            <div className="mobile-cutoff-grid">
+                              <div className="mobile-cutoff-grid-item">
+                                <span className="grid-label">
+                                  {isRankSearch ? (isJosaa ? 'Closing' : 'Cutoff') : 'Cutoff'}
+                                </span>
+                                <span className="grid-value">
+                                  {isRankSearch
+                                    ? (isJosaa ? cutoff.stage2MeritNo || '—' : cutoff.cutoffMeritNo || '—')
+                                    : (cutoff.cutoffPercentile?.toFixed(2) ?? '—')}
+                                </span>
+                              </div>
+
+                              <div className="mobile-cutoff-grid-item">
+                                <span className="grid-label">
+                                  {isRankSearch ? 'Your Rank' : 'Your %ile'}
+                                </span>
+                                <span className="grid-value highlight">
+                                  {isRankSearch ? queryParams?.rank || '—' : studentPercentileFormatted}
+                                </span>
+                              </div>
+
+                              <div className="mobile-cutoff-grid-item">
+                                <span className="grid-label">Margin</span>
+                                <span className={`grid-value ${diff >= 0 ? 'positive' : 'negative'}`}>
+                                  {diffFormatted}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="college-table-wrapper comparison-table-wrapper">
                     <table className="college-table">
                       <thead>
                         <tr>
                           <th>Branch</th>
                           {isJosaa && <th>Quota</th>}
-                          {isRankSearch ? (
-                            isJosaa ? (
-                              <>
-                                <th>Opening Rank</th>
-                                <th>Closing Rank</th>
-                                <th>Your Rank</th>
-                              </>
-                            ) : (
-                              <>
-                                <th>Cutoff Rank</th>
-                                <th>Your Rank</th>
-                                <th>Cutoff %ile</th>
-                              </>
-                            )
-                          ) : (
-                            <>
-                              <th>Cutoff %ile</th>
-                              <th>Your %ile</th>
-                            </>
-                          )}
-                          <th>Margin</th>
-                          <th>Chance</th>
+                          {rounds.map(r => (
+                            <th key={r.id} style={{ textAlign: 'center' }}>
+                              {r.roundName}
+                            </th>
+                          ))}
+                          <th style={{ textAlign: 'center' }}>Your Score</th>
+                          <th style={{ textAlign: 'center' }}>Trend</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {cutoffData.map((cutoff, cIdx) => {
-                          const chance = getChanceDisplay(cutoff.chanceLabel);
-                          const diff = cutoff.percentileDiff;
-                          const isRankDiff = isJosaa || isRankSearch;
-                          const diffFormatted = isRankDiff
-                            ? (diff >= 0 ? `+${diff}` : `${diff}`)
-                            : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
-                          
+                        {multiRoundData.map((branchCutoff, cIdx) => {
+                          const sparklineData = rounds.map(r => {
+                            const rd = branchCutoff.roundCutoffs[r.id];
+                            const val = rd 
+                              ? (isRankSearch ? (isJosaa ? rd.stage2MeritNo : rd.cutoffMeritNo) : rd.cutoffPercentile)
+                              : null;
+                            return {
+                              value: val,
+                              roundName: r.roundName
+                            };
+                          });
+
                           return (
-                            <tr key={`${cutoff.branchCode}-${cIdx}`}>
+                            <tr key={`${branchCutoff.branchCode}-${cIdx}`}>
                               <td className="branch-cell">
-                                <span className="branch-name">{cutoff.branchName}</span>
+                                <span className="branch-name">{branchCutoff.branchName}</span>
                               </td>
                               {isJosaa && (
                                 <td>
-                                  <span className="meta-tag small">{cutoff.seatBlockType}</span>
+                                  <span className="meta-tag small">{branchCutoff.seatBlockType}</span>
                                 </td>
                               )}
-                              {isRankSearch ? (
-                                isJosaa ? (
-                                  <>
-                                    <td className="number-cell">{cutoff.cutoffMeritNo || '—'}</td>
-                                    <td className="number-cell">{cutoff.stage2MeritNo || '—'}</td>
-                                    <td className="number-cell highlight">{queryParams?.rank || '—'}</td>
-                                  </>
-                                ) : (
-                                  <>
-                                    <td className="number-cell">{cutoff.cutoffMeritNo || '—'}</td>
-                                    <td className="number-cell highlight">{queryParams?.rank || '—'}</td>
-                                    <td className="number-cell">{cutoff.cutoffPercentile?.toFixed(2) ?? '—'}</td>
-                                  </>
-                                )
-                              ) : (
-                                <>
-                                  <td className="number-cell">{cutoff.cutoffPercentile?.toFixed(2) ?? '—'}</td>
-                                  <td className="number-cell highlight">{queryParams?.percentile || '—'}</td>
-                                </>
-                              )}
-                              <td className={`number-cell ${diff >= 0 ? 'positive' : 'negative'}`}>
-                                {diffFormatted}
+                              {rounds.map((r, rIdx) => {
+                                const rd = branchCutoff.roundCutoffs[r.id];
+                                if (!rd) {
+                                  return (
+                                    <td key={r.id}>
+                                      <div className="cell-round-value">
+                                        <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                                      </div>
+                                    </td>
+                                  );
+                                }
+
+                                const chance = getChanceDisplay(rd.chanceLabel);
+                                const value = isRankSearch
+                                  ? (isJosaa ? rd.stage2MeritNo : rd.cutoffMeritNo)
+                                  : rd.cutoffPercentile?.toFixed(2);
+
+                                let dropText = null;
+                                let dropClass = 'neutral';
+                                if (rIdx > 0) {
+                                  const prevRound = rounds[rIdx - 1];
+                                  const prevRd = branchCutoff.roundCutoffs[prevRound.id];
+                                  if (prevRd) {
+                                    if (isRankSearch) {
+                                      const currVal = isJosaa ? rd.stage2MeritNo : rd.cutoffMeritNo;
+                                      const prevVal = isJosaa ? prevRd.stage2MeritNo : prevRd.cutoffMeritNo;
+                                      if (currVal && prevVal) {
+                                        const diff = currVal - prevVal;
+                                        if (diff > 0) {
+                                          dropText = `↓ ${diff}`;
+                                          dropClass = 'positive';
+                                        } else if (diff < 0) {
+                                          dropText = `↑ ${Math.abs(diff)}`;
+                                          dropClass = 'negative';
+                                        }
+                                      }
+                                    } else {
+                                      const currVal = rd.cutoffPercentile;
+                                      const prevVal = prevRd.cutoffPercentile;
+                                      if (currVal !== null && prevVal !== null) {
+                                        const diff = currVal - prevVal;
+                                        if (diff < 0) {
+                                          dropText = `↓ ${Math.abs(diff).toFixed(2)}`;
+                                          dropClass = 'positive';
+                                        } else if (diff > 0) {
+                                          dropText = `↑ ${diff.toFixed(2)}`;
+                                          dropClass = 'negative';
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <td key={r.id}>
+                                    <div className="cell-round-value">
+                                      <div className="cell-round-main">
+                                        <span className={`chance-dot ${rd.chanceLabel.toLowerCase()}`} title={`Chance: ${rd.chanceLabel}`} />
+                                        <span>{value}</span>
+                                      </div>
+                                      {dropText && (
+                                        <span className={`cell-round-drop ${dropClass}`}>
+                                          {dropText}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              <td style={{ textAlign: 'center' }}>
+                                <span className="number-cell highlight">
+                                  {isRankSearch ? queryParams?.rank || '—' : studentPercentileFormatted}
+                                </span>
                               </td>
                               <td>
-                                <span className={`badge badge-sm ${chance.className}`}>
-                                  {chance.emoji} {cutoff.chanceLabel}
-                                </span>
+                                <Sparkline data={sparklineData} isRank={isRankSearch} />
                               </td>
                             </tr>
                           );
@@ -329,70 +605,12 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                       </tbody>
                     </table>
                   </div>
-
-                  {/* Mobile List View */}
-                  <div className="mobile-cutoff-list">
-                    {cutoffData.map((cutoff, cIdx) => {
-                      const chance = getChanceDisplay(cutoff.chanceLabel);
-                      const diff = cutoff.percentileDiff;
-                      const isRankDiff = isJosaa || isRankSearch;
-                      const diffFormatted = isRankDiff
-                        ? (diff >= 0 ? `+${diff}` : `${diff}`)
-                        : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
-
-                      return (
-                        <div key={`${cutoff.branchCode}-${cIdx}`} className="mobile-cutoff-card">
-                          <div className="mobile-cutoff-card-header">
-                            <span className="mobile-branch-name">{cutoff.branchName}</span>
-                            <span className={`badge badge-sm ${chance.className}`} style={{ marginLeft: 'var(--space-2)' }}>
-                              {chance.emoji} {cutoff.chanceLabel}
-                            </span>
-                          </div>
-
-                          {isJosaa && (
-                            <div style={{ marginBottom: 'var(--space-2)' }}>
-                              <span className="meta-tag small">{cutoff.seatBlockType}</span>
-                            </div>
-                          )}
-
-                          <div className="mobile-cutoff-grid">
-                            <div className="mobile-cutoff-grid-item">
-                              <span className="grid-label">
-                                {isRankSearch ? (isJosaa ? 'Closing' : 'Cutoff') : 'Cutoff'}
-                              </span>
-                              <span className="grid-value">
-                                {isRankSearch
-                                  ? (isJosaa ? cutoff.stage2MeritNo || '—' : cutoff.cutoffMeritNo || '—')
-                                  : (cutoff.cutoffPercentile?.toFixed(2) ?? '—')}
-                              </span>
-                            </div>
-
-                            <div className="mobile-cutoff-grid-item">
-                              <span className="grid-label">
-                                {isRankSearch ? 'Your Rank' : 'Your %ile'}
-                              </span>
-                              <span className="grid-value highlight">
-                                {isRankSearch ? queryParams?.rank || '—' : queryParams?.percentile || '—'}
-                              </span>
-                            </div>
-
-                            <div className="mobile-cutoff-grid-item">
-                              <span className="grid-label">Margin</span>
-                              <span className={`grid-value ${diff >= 0 ? 'positive' : 'negative'}`}>
-                                {diffFormatted}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
+                )
               )}
             </div>
-            
+
             <div className="modal-footer" style={{ padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>Close</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setModalType(null)}>Close</button>
             </div>
           </div>
         </div>,

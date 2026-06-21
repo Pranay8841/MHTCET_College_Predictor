@@ -78,6 +78,7 @@ router.get('/types', async (req, res) => {
 /**
  * GET /api/colleges/:collegeCode/cutoffs
  * Get all branch cutoffs for a specific college in a given round/profile.
+ * Returns both the selected round's cutoffs and structured multi-round comparison data.
  */
 router.get('/:collegeCode/cutoffs', async (req, res) => {
   try {
@@ -124,9 +125,72 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
       categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
     }
 
+    // 1. Fetch Year metadata for the selected round
+    let yearValue = null;
+    try {
+      const { data: roundMeta, error: roundError } = await supabase
+        .from('rounds_metadata')
+        .select('year')
+        .eq('round_id', roundId)
+        .single();
+      if (!roundError && roundMeta) {
+        yearValue = roundMeta.year;
+      }
+    } catch (e) {
+      console.warn('⚠️ Rounds metadata year fetch failed:', e.message);
+    }
+
+    if (!yearValue) {
+      const yearMatch = roundId.match(/^(\d{4}(?:-\d{2,4})?)/);
+      yearValue = yearMatch ? yearMatch[1] : null;
+    }
+
+    // 2. Query all ready rounds for that same year & exam stream
+    let activeRounds = [];
+    if (yearValue) {
+      try {
+        const { data: roundsMeta, error: roundsMetaError } = await supabase
+          .from('rounds_metadata')
+          .select('round_id, round_name, year, uploaded_at')
+          .eq('year', yearValue)
+          .eq('status', 'ready');
+
+        if (!roundsMetaError && roundsMeta) {
+          // Filter by exam stream
+          activeRounds = roundsMeta.filter(r => {
+            const idLower = r.round_id.toLowerCase();
+            const isJosaaRound = idLower.includes('josaa');
+            const isPharmaRound = idLower.includes('pharma');
+            const isNursingRound = idLower.includes('nursing');
+            const isAgricultureRound = idLower.includes('agriculture');
+            
+            if (examId === 'pharma') return isPharmaRound;
+            if (examId === 'nursing') return isNursingRound;
+            if (examId === 'agriculture') return isAgricultureRound;
+            if (examId === 'josaa') return isJosaaRound;
+            return !isJosaaRound && !isPharmaRound && !isNursingRound && !isAgricultureRound;
+          });
+
+          // Sort chronologically by uploaded_at
+          activeRounds.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
+        }
+      } catch (e) {
+        console.warn('⚠️ Rounds list fetch failed:', e.message);
+      }
+    }
+
+    // Fallback if no rounds found
+    if (activeRounds.length === 0) {
+      activeRounds = [{ round_id: roundId, round_name: 'Selected Round', year: yearValue }];
+    }
+
+    const roundIds = activeRounds.map(r => r.round_id);
+
+    // 3. Query cutoffs for all rounds
     const { data: dbRows, error: dbError } = await supabase
       .from('cutoffs')
       .select(`
+        round_id,
         stage1_merit_no,
         stage1_percentile,
         stage2_merit_no,
@@ -137,7 +201,7 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
       `)
       .eq('college_code', collegeCode)
       .eq('exam_id', examId)
-      .eq('round_id', roundId)
+      .in('round_id', roundIds)
       .in('category_code', categoryCodes);
 
     if (dbError) throw dbError;
@@ -175,7 +239,11 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
       return { 3: 'High', 2: 'Medium', 1: 'Low', 0: 'None' }[chance] || 'None';
     };
 
+    // 4. Populate selected round cutoffs (backward compatibility)
     const cutoffs = [];
+    // 5. Populate multi-round cutoff details
+    const multiRoundMap = {};
+
     dbRows.forEach(row => {
       if (!matchesSeatType(row.seat_block_type, seatType, examId)) return;
 
@@ -199,11 +267,36 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
         margin = pct !== null && !isNaN(cutoffPct) ? parseFloat((pct - cutoffPct).toFixed(7)) : 0;
       }
 
-      cutoffs.push({
-        branchCode: row.branches.branch_code,
-        branchName: row.branches.branch_name,
-        seatBlockType: row.seat_block_type,
-        category: row.category_code,
+      // Selected round cutoff mapping
+      if (row.round_id === roundId) {
+        cutoffs.push({
+          branchCode: row.branches.branch_code,
+          branchName: row.branches.branch_name,
+          seatBlockType: row.seat_block_type,
+          category: row.category_code,
+          cutoffPercentile: row.stage1_percentile ? parseFloat(row.stage1_percentile) : null,
+          cutoffMeritNo: row.stage1_merit_no,
+          stage2Percentile: row.stage2_percentile ? parseFloat(row.stage2_percentile) : null,
+          stage2MeritNo: row.stage2_merit_no,
+          percentileDiff: margin,
+          chance,
+          chanceLabel: getChanceLabel(chance)
+        });
+      }
+
+      // Multi-round cutoff mapping
+      const key = `${row.branches.branch_code}_${row.seat_block_type}`;
+      if (!multiRoundMap[key]) {
+        multiRoundMap[key] = {
+          branchCode: row.branches.branch_code,
+          branchName: row.branches.branch_name,
+          seatBlockType: row.seat_block_type,
+          category: row.category_code,
+          roundCutoffs: {}
+        };
+      }
+
+      multiRoundMap[key].roundCutoffs[row.round_id] = {
         cutoffPercentile: row.stage1_percentile ? parseFloat(row.stage1_percentile) : null,
         cutoffMeritNo: row.stage1_merit_no,
         stage2Percentile: row.stage2_percentile ? parseFloat(row.stage2_percentile) : null,
@@ -211,15 +304,25 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
         percentileDiff: margin,
         chance,
         chanceLabel: getChanceLabel(chance)
-      });
+      };
     });
 
-    // Sort by branch name alphabetically
+    // Sort single round cutoffs alphabetically by branch name
     cutoffs.sort((a, b) => a.branchName.localeCompare(b.branchName));
+
+    // Convert multi-round map to array and sort alphabetically
+    const multiRoundData = Object.values(multiRoundMap);
+    multiRoundData.sort((a, b) => a.branchName.localeCompare(b.branchName));
 
     res.json({
       total: cutoffs.length,
-      cutoffs
+      cutoffs,
+      rounds: activeRounds.map(r => ({
+        id: r.round_id,
+        roundName: r.round_name,
+        year: r.year
+      })),
+      multiRoundData
     });
   } catch (err) {
     console.error('❌ Error fetching college cutoffs:', err);
