@@ -53,6 +53,11 @@ export const fetchColleges = async (search) => {
   return response.data;
 };
 
+export const fetchCollegeCutoffs = async (collegeCode, params) => {
+  const response = await api.get(`/colleges/${collegeCode}/cutoffs`, { params });
+  return response.data;
+};
+
 export const fetchCollegeTypes = async () => {
   const response = await api.get('/colleges/types');
   return response.data;

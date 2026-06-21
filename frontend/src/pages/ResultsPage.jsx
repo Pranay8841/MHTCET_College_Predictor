@@ -470,6 +470,7 @@ function ResultsPage() {
                   index={(currentPage - 1) * COLLEGES_PER_PAGE + idx}
                   isJosaa={queryParams.isJosaa}
                   isRankSearch={queryParams.isRankSearch}
+                  queryParams={queryParams}
                 />
               ))}
             </div>
@@ -496,27 +497,35 @@ function ResultsPage() {
           {totalPages > 1 && (
             <div className="pagination">
               <button
+                className="pagination-btn prev-btn"
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
               >
                 ← Prev
               </button>
 
-              {generatePageNumbers(currentPage, totalPages).map((pageNum, idx) => (
-                pageNum === '...' ? (
-                  <span key={`dots-${idx}`} style={{ color: 'var(--color-text-muted)', padding: '0 4px' }}>…</span>
-                ) : (
-                  <button
-                    key={pageNum}
-                    className={currentPage === pageNum ? 'active' : ''}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </button>
-                )
-              ))}
+              <span className="pagination-info">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <div className="pagination-pages">
+                {generatePageNumbers(currentPage, totalPages).map((pageNum, idx) => (
+                  pageNum === '...' ? (
+                    <span key={`dots-${idx}`} className="pagination-dots">…</span>
+                  ) : (
+                    <button
+                      key={pageNum}
+                      className={currentPage === pageNum ? 'active' : ''}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                ))}
+              </div>
 
               <button
+                className="pagination-btn next-btn"
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
               >

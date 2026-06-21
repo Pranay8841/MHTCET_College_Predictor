@@ -12,7 +12,13 @@ function App() {
         <nav className="navbar">
           <div className="container">
             <NavLink to="/" className="navbar-brand">
-              <span className="brand-icon">🎓</span>
+              <span className="brand-logo-wrapper">
+                <img 
+                  src="/IMG-20240521-WA0022-removebg-preview.png" 
+                  alt="Navodisha Logo" 
+                  className="brand-logo-img" 
+                />
+              </span>
               <span>NAVO<span className="brand-accent">DISHA</span></span>
             </NavLink>
             <ul className="navbar-nav">
