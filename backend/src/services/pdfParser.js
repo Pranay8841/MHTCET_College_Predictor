@@ -1,16 +1,3 @@
-/**
- * PDF Parser for MHTCET CAP Round Cutoff PDFs
- * 
- * Parses the structured cutoff data from Maharashtra State CET Cell PDFs.
- * 
- * ACTUAL PDF TEXT FORMAT (from pdf-parse):
- * - Category headers are concatenated without spaces: "GOPENSGSCSGSTSGVJSGNT1S..."
- * - Merit numbers and percentiles are each on their OWN line (not space-separated)
- * - "Status:" is on one line, the value on the next
- * - "Stage" appears alone at end of data block (not "Stage GOPENS GSCS...")
- * - Category header may wrap across multiple lines
- */
-
 const pdfParse = require('pdf-parse');
 
 // All known category codes for splitting concatenated headers
@@ -32,9 +19,8 @@ function buildAllCategoryCodes() {
     codes.add(base + 'S');
     codes.add(base + 'H');
     codes.add(base + 'O');
-    codes.add(base); // some like EWS, ORPHAN may appear without suffix
+    codes.add(base);
   }
-  // Also add codes that appear without standard suffix
   codes.add('EWS');
   codes.add('ORPHAN');
   codes.add('TFWS');
@@ -56,7 +42,7 @@ function splitCategoryHeaders(concatenated) {
   while (remaining.length > 0) {
     let found = false;
 
-    // Try longest match first (greedy) — sort candidates by length descending
+    // Try longest match first (greedy)
     const candidates = [...ALL_CATEGORY_CODES]
       .filter(code => remaining.startsWith(code))
       .sort((a, b) => b.length - a.length);
@@ -68,7 +54,6 @@ function splitCategoryHeaders(concatenated) {
     }
 
     if (!found) {
-      // Skip one character and try again (handles garbage)
       remaining = remaining.slice(1);
     }
   }
@@ -77,26 +62,53 @@ function splitCategoryHeaders(concatenated) {
 }
 
 /**
- * Parse a CAP Round cutoff PDF buffer and extract all structured data.
- * @param {Buffer} pdfBuffer - The PDF file buffer
- * @returns {Array} Array of parsed branch entries with cutoff data
+ * Map each merit/percentile x-coordinate to the closest category header's x-coordinate.
+ */
+function findClosestCategory(valueX, headers) {
+  if (headers.length === 0) return null;
+  let closestHeader = null;
+  let minDistance = Infinity;
+
+  for (const header of headers) {
+    const dist = Math.abs(valueX - header.x);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestHeader = header;
+    }
+  }
+
+  // Column width is roughly 50 points, so values should be within 35 points of the header center
+  if (minDistance > 35) {
+    return null;
+  }
+  return closestHeader;
+}
+
+/**
+ * Coordinate-Aware parser for Maharashtra CAP Round PDF cutoffs.
  */
 async function parseCutoffPDF(pdfBuffer) {
-  const data = await pdfParse(pdfBuffer);
-  const lines = data.text.split('\n');
+  const pageItemsList = [];
+
+  // Custom page renderer to extract text items and their coordinates
+  function pagerender(pageData) {
+    return pageData.getTextContent().then(function(textContent) {
+      const items = textContent.items.map(item => ({
+        text: item.str,
+        x: item.transform[4],
+        y: item.transform[5]
+      }));
+      pageItemsList.push(items);
+      return ''; // Prevent full text buffering to save memory
+    });
+  }
+
+  await pdfParse(pdfBuffer, { pagerender });
 
   const results = [];
-  let currentCollege = null;
-  let currentBranch = null;
-  let currentSeatBlock = null;
-  let categoryHeaders = [];
-  let collectingMeritData = false;
-  let meritValues = [];  // [{merit, percentile}, ...]
 
-  // --- Regex Patterns ---
   const COLLEGE_REGEX = /^(\d{5})\s*-\s*(.+)$/;
   const BRANCH_REGEX = /^(\d{10})\s*-\s*(.+)$/;
-
   const SEAT_BLOCK_KEYWORDS = [
     'Home University Seats Allotted to Other Than Home University Candidates',
     'Other Than Home University Seats Allotted to Other Than Home University Candidates',
@@ -105,256 +117,207 @@ async function parseCutoffPDF(pdfBuffer) {
     'State Level'
   ];
 
-  // Lines to skip
-  const SKIP_PATTERNS = [
-    /^D$/,
-    /^i$/,
-    /^r$/,
-    /^State Common Entrance Test Cell/,
-    /^Cut Off List/,
-    /^Degree Courses/,
-    /^Government of Maharashtra/,
-    /^Legends:/,
-    /^Maharashtra State Seats/,
-    /^Page\s+\d+/,
-    /^--+$/,
-    /^Figures in bracket/,
-  ];
+  const STAGE_REGEX = /^\s*(I|II|III|IV|V|VI|VII|VIII|IX|X|I-Non PWD)\s*$/i;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // Skip known header/footer lines
-    if (SKIP_PATTERNS.some(p => p.test(line))) continue;
-
-    // --- Detect College (5-digit code) ---
-    const collegeMatch = line.match(COLLEGE_REGEX);
-    if (collegeMatch) {
-      // Finalize previous branch
-      finalizeBranch(results, currentCollege, currentBranch, currentSeatBlock, categoryHeaders, meritValues);
-
-      currentCollege = {
-        collegeCode: collegeMatch[1],
-        collegeName: collegeMatch[2].trim()
-      };
-      currentBranch = null;
-      currentSeatBlock = null;
-      categoryHeaders = [];
-      meritValues = [];
-      collectingMeritData = false;
-      continue;
-    }
-
-    // --- Detect Branch (10-digit code) ---
-    const branchMatch = line.match(BRANCH_REGEX);
-    if (branchMatch) {
-      // Finalize previous branch
-      finalizeBranch(results, currentCollege, currentBranch, currentSeatBlock, categoryHeaders, meritValues);
-
-      currentBranch = {
-        branchCode: branchMatch[1],
-        branchName: branchMatch[2].trim(),
-        collegeType: '',
-        homeUniversity: '',
-        seatBlocks: []
-      };
-      currentSeatBlock = null;
-      categoryHeaders = [];
-      meritValues = [];
-      collectingMeritData = false;
-      continue;
-    }
-
-    // --- Detect Status line ---
-    if (line === 'Status:' && currentBranch) {
-      // Next line has the actual status+university info
-      const nextLine = (lines[i + 1] || '').trim();
-      // Format: "Government Autonomous Home University : Autonomous Institute"
-      const huMatch = nextLine.match(/^(.+?)\s*Home\s*University\s*:\s*(.+)$/i);
-      if (huMatch) {
-        currentBranch.collegeType = huMatch[1].trim();
-        currentBranch.homeUniversity = huMatch[2].trim();
-      } else {
-        // If there's no "Home University :" separator, the entire next line is the status / college type
-        currentBranch.collegeType = nextLine;
-        currentBranch.homeUniversity = 'State Level';
+  // Process each page
+  for (let p = 0; p < pageItemsList.length; p++) {
+    const rawItems = pageItemsList[p];
+    
+    // Sort items by y descending (top to bottom), and then by x ascending (left to right)
+    const items = [...rawItems].sort((a, b) => {
+      if (Math.abs(b.y - a.y) < 4) {
+        return a.x - b.x;
       }
-      i++; // skip the next line since we consumed it
-      continue;
-    }
+      return b.y - a.y;
+    });
 
-    // --- Detect Seat Block ---
-    const seatBlockType = SEAT_BLOCK_KEYWORDS.find(kw => line.includes(kw));
-    if (seatBlockType && currentBranch) {
-      // Save previous seat block data
-      if (currentSeatBlock && categoryHeaders.length > 0) {
-        assignMeritToCategories(currentSeatBlock, categoryHeaders, meritValues);
-      }
-      currentSeatBlock = { seatBlockType, categories: {} };
-      currentBranch.seatBlocks.push(currentSeatBlock);
-      categoryHeaders = [];
-      meritValues = [];
-      collectingMeritData = false;
-      continue;
-    }
+    let currentCollege = null;
+    let currentBranch = null;
+    let currentSeatBlock = null;
+    let currentHeaders = []; // [{ code, x }]
+    let collectingMeritData = false;
+    let currentStage = 1; // 1 for Stage I, 2 for subsequent stages
 
-    // --- Detect Stage marker "  I" or "  II" (merit data start) ---
-    // Must check BEFORE category header detection since "I" is all uppercase
-    if (currentSeatBlock && /^\s*(I|II)\s*$/.test(line)) {
-      collectingMeritData = true;
-      // Save previous block data if this is stage II
-      if (line.trim() === 'II' && meritValues.length > 0) {
-        assignMeritToCategories(currentSeatBlock, categoryHeaders, meritValues, 'I');
-        meritValues = [];
-      }
-      continue;
-    }
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const text = item.text.trim();
+      if (!text) continue;
 
-    // --- Detect concatenated category header ---
-    // It looks like: "GOPENSGSCSGSTSGVJSGNT1SGNT2SGNT3SGOBCSGSEBCSLOPENSLSCSLSTSLVJSLNT2SLOBCSLSEBCS..."
-    // It starts with a known category prefix and is all uppercase letters and digits
-    if (currentSeatBlock && !collectingMeritData && /^[A-Z0-9]{6,}$/.test(line)) {
-      // Accumulate header lines (they may wrap across multiple lines)
-      const newHeaders = splitCategoryHeaders(line);
-      if (newHeaders.length > 0) {
-        categoryHeaders = categoryHeaders.concat(newHeaders);
-      }
-      continue;
-    }
-
-    // --- Handle short wrapped header lines like "S", "H", "O" or "DEFRSEBC" ---
-    if (currentSeatBlock && !collectingMeritData && /^[A-Z0-9]{1,12}$/.test(line)) {
-      if (line === 'Stage') {
-        // "Stage" at end = end of data block
+      // 1. Detect College (5-digit code)
+      const collegeMatch = text.match(COLLEGE_REGEX);
+      if (collegeMatch) {
+        currentCollege = {
+          collegeCode: collegeMatch[1],
+          collegeName: collegeMatch[2].trim()
+        };
+        currentBranch = null;
+        currentSeatBlock = null;
+        currentHeaders = [];
+        collectingMeritData = false;
         continue;
       }
 
-      // A lone "S", "H", or "O" is likely a suffix that wrapped from the previous line
-      // Append it to the last category header code
-      if ((line === 'S' || line === 'H' || line === 'O') && categoryHeaders.length > 0) {
-        const lastCode = categoryHeaders[categoryHeaders.length - 1];
-        // Only append if the last code doesn't already end with S/H/O
-        if (!lastCode.endsWith('S') && !lastCode.endsWith('H') && !lastCode.endsWith('O')) {
-          categoryHeaders[categoryHeaders.length - 1] = lastCode + line;
-        } else {
-          // It might be a new code prefix — try splitting
-          const newHeaders = splitCategoryHeaders(line);
-          if (newHeaders.length > 0) {
-            categoryHeaders = categoryHeaders.concat(newHeaders);
+      // 2. Detect Branch (10-digit code)
+      const branchMatch = text.match(BRANCH_REGEX);
+      if (branchMatch) {
+        currentBranch = {
+          branchCode: branchMatch[1],
+          branchName: branchMatch[2].trim(),
+          collegeType: '',
+          homeUniversity: '',
+          seatBlocks: []
+        };
+        
+        // Push an empty template row to results which we update inline below
+        results.push({
+          collegeCode: currentCollege ? currentCollege.collegeCode : '',
+          collegeName: currentCollege ? currentCollege.collegeName : '',
+          branchCode: currentBranch.branchCode,
+          branchName: currentBranch.branchName,
+          collegeType: '',
+          homeUniversity: '',
+          seatBlocks: currentBranch.seatBlocks
+        });
+        
+        currentSeatBlock = null;
+        currentHeaders = [];
+        collectingMeritData = false;
+        continue;
+      }
+
+      // 3. Detect Status line
+      if (text === 'Status:' && currentBranch) {
+        // Collect status components on the same visual line
+        let statusText = '';
+        let nextIdx = idx + 1;
+        while (nextIdx < items.length && Math.abs(items[nextIdx].y - item.y) < 5) {
+          statusText += items[nextIdx].text;
+          nextIdx++;
+        }
+        
+        const huMatch = statusText.match(/^(.+?)\s*Home\s*University\s*:\s*(.+)$/i);
+        const activeResult = results.find(r => r.branchCode === currentBranch.branchCode);
+        
+        if (activeResult) {
+          if (huMatch) {
+            activeResult.collegeType = huMatch[1].trim();
+            activeResult.homeUniversity = huMatch[2].trim();
+            currentBranch.collegeType = huMatch[1].trim();
+            currentBranch.homeUniversity = huMatch[2].trim();
+          } else {
+            activeResult.collegeType = statusText.trim();
+            activeResult.homeUniversity = 'State Level';
+            currentBranch.collegeType = statusText.trim();
+            currentBranch.homeUniversity = 'State Level';
           }
         }
+        idx = nextIdx - 1; // skip processed items
         continue;
       }
 
-      // Try to split as category codes (handles things like "DEFRSEBC", "EWS", etc.)
-      const newHeaders = splitCategoryHeaders(line);
-      if (newHeaders.length > 0) {
-        categoryHeaders = categoryHeaders.concat(newHeaders);
-      }
-      continue;
-    }
-
-    // --- Collect merit numbers and percentiles ---
-    if (collectingMeritData && currentSeatBlock) {
-      // Merit number: a plain number like "34240"
-      const meritMatch = line.match(/^(\d+)$/);
-      if (meritMatch) {
-        const meritNo = parseInt(meritMatch[1], 10);
-        // Don't treat page numbers (standalone small numbers after legends) as merit
-        if (meritNo > 0) {
-          meritValues.push({ merit: meritNo, percentile: null });
-        }
-        continue;
-      }
-
-      // Percentile: "(88.5013511)"
-      const pctMatch = line.match(/^\((\d+\.?\d*)\)$/);
-      if (pctMatch && meritValues.length > 0) {
-        // Assign to the last merit entry that doesn't have a percentile
-        const lastMerit = meritValues[meritValues.length - 1];
-        if (lastMerit && lastMerit.percentile === null) {
-          lastMerit.percentile = parseFloat(pctMatch[1]);
-        }
-        continue;
-      }
-
-      // "Stage" alone = end of current data block
-      if (line === 'Stage') {
+      // 4. Detect Seat Block
+      const seatBlockKeyword = SEAT_BLOCK_KEYWORDS.find(kw => text.includes(kw));
+      if (seatBlockKeyword && currentBranch) {
+        currentSeatBlock = {
+          seatBlockType: seatBlockKeyword,
+          categories: {}
+        };
+        currentBranch.seatBlocks.push(currentSeatBlock);
+        currentHeaders = [];
         collectingMeritData = false;
         continue;
       }
 
-      // If we hit something that doesn't match, stop collecting
-      // (could be next branch, status line, etc.)
-      if (!meritMatch && !pctMatch) {
-        collectingMeritData = false;
-        // Don't skip this line — let it be processed by other handlers
-        i--;
+      // 5. Detect Stage Marker
+      if (currentSeatBlock && STAGE_REGEX.test(text)) {
+        const stageStr = text.toUpperCase();
+        currentStage = (stageStr === 'I' || stageStr === 'I-NON PWD') ? 1 : 2;
+        collectingMeritData = true;
         continue;
       }
-    }
-  }
 
-  // Finalize last branch
-  finalizeBranch(results, currentCollege, currentBranch, currentSeatBlock, categoryHeaders, meritValues);
+      // 6. Detect Category Headers
+      if (currentSeatBlock && !collectingMeritData) {
+        const splitCodes = splitCategoryHeaders(text);
+        if (splitCodes.length > 0) {
+          splitCodes.forEach((code, codeIdx) => {
+            currentHeaders.push({
+              code,
+              x: item.x + codeIdx * 50
+            });
+          });
+          continue;
+        }
+      }
 
-  console.log(`📊 Parsed ${results.length} branch entries from PDF`);
-  return results;
-}
+      // 7. Match Merit Numbers and Percentiles using coordinates
+      if (collectingMeritData && currentSeatBlock && currentHeaders.length > 0) {
+        // Merit number (pure integer)
+        const meritMatch = text.match(/^(\d+)$/);
+        if (meritMatch) {
+          const meritNo = parseInt(meritMatch[1], 10);
+          
+          // Ignore page numbers (which are always at the bottom, e.g. y < 45)
+          if (meritNo > 0 && item.y > 45) {
+            const matchedHeader = findClosestCategory(item.x, currentHeaders);
+            if (matchedHeader) {
+              const cat = matchedHeader.code;
+              if (!currentSeatBlock.categories[cat]) {
+                currentSeatBlock.categories[cat] = {
+                  stage1MeritNo: null,
+                  stage1Percentile: null,
+                  stage2MeritNo: null,
+                  stage2Percentile: null
+                };
+              }
+              if (currentStage === 1) {
+                currentSeatBlock.categories[cat].stage1MeritNo = meritNo;
+              } else {
+                currentSeatBlock.categories[cat].stage2MeritNo = meritNo;
+              }
+            }
+          }
+          continue;
+        }
 
-/**
- * Assign collected merit/percentile values to category headers.
- */
-function assignMeritToCategories(seatBlock, categoryHeaders, meritValues, stage = 'I') {
-  if (!seatBlock || categoryHeaders.length === 0 || meritValues.length === 0) return;
+        // Percentile value (parenthesized float)
+        const pctMatch = text.match(/^\((\d+\.?\d*)\)$/);
+        if (pctMatch) {
+          const percentile = parseFloat(pctMatch[1]);
+          const matchedHeader = findClosestCategory(item.x, currentHeaders);
+          
+          if (matchedHeader) {
+            const cat = matchedHeader.code;
+            if (!currentSeatBlock.categories[cat]) {
+              currentSeatBlock.categories[cat] = {
+                stage1MeritNo: null,
+                stage1Percentile: null,
+                stage2MeritNo: null,
+                stage2Percentile: null
+              };
+            }
+            if (currentStage === 1) {
+              currentSeatBlock.categories[cat].stage1Percentile = percentile;
+            } else {
+              currentSeatBlock.categories[cat].stage2Percentile = percentile;
+            }
+          }
+          continue;
+        }
 
-  categoryHeaders.forEach((cat, idx) => {
-    if (!seatBlock.categories[cat]) {
-      seatBlock.categories[cat] = {
-        stage1MeritNo: null,
-        stage1Percentile: null,
-        stage2MeritNo: null,
-        stage2Percentile: null
-      };
-    }
-
-    if (idx < meritValues.length) {
-      const val = meritValues[idx];
-      if (stage === 'I') {
-        seatBlock.categories[cat].stage1MeritNo = val.merit;
-        seatBlock.categories[cat].stage1Percentile = val.percentile;
-      } else {
-        seatBlock.categories[cat].stage2MeritNo = val.merit;
-        seatBlock.categories[cat].stage2Percentile = val.percentile;
+        // End marker for the block
+        if (text === 'Stage') {
+          collectingMeritData = false;
+          continue;
+        }
       }
     }
-  });
-}
-
-/**
- * Finalize current branch and save to results.
- */
-function finalizeBranch(results, college, branch, seatBlock, categoryHeaders, meritValues) {
-  if (!college || !branch) return;
-
-  // Assign remaining merit data to current seat block
-  if (seatBlock && categoryHeaders.length > 0 && meritValues.length > 0) {
-    assignMeritToCategories(seatBlock, categoryHeaders, meritValues);
   }
 
-  // Only save if there's meaningful data
-  if (branch.branchCode) {
-    results.push({
-      collegeCode: college.collegeCode,
-      collegeName: college.collegeName,
-      branchCode: branch.branchCode,
-      branchName: branch.branchName,
-      collegeType: branch.collegeType,
-      homeUniversity: branch.homeUniversity,
-      seatBlocks: branch.seatBlocks
-    });
-  }
+  // Filter valid parsed entries
+  const finalResults = results.filter(r => r.branchCode);
+  console.log(`📊 Coordinate-Aware Parsed ${finalResults.length} branch entries from PDF`);
+  return finalResults;
 }
 
 module.exports = { parseCutoffPDF };
