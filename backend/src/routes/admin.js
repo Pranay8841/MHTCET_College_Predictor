@@ -52,10 +52,16 @@ router.post('/upload-pdf', adminGuard, upload.single('pdfFile'), async (req, res
     }
 
     const isHtml = req.file.mimetype === 'text/html' || req.file.originalname.endsWith('.html');
-    const { roundName, year, examId = 'mhtcet' } = req.body;
+    let { roundName, year, examId = 'mhtcet' } = req.body;
     if (!roundName || !year) {
       return res.status(400).json({ error: 'roundName and year are required' });
     }
+
+    // Normalize roman numerals (e.g. replace lowercase 'l' with 'I') and trim spaces
+    roundName = roundName.trim().replace(/Round\s+([lvx]+)/i, (match, roman) => {
+      return `Round ${roman.toUpperCase().replace(/L/g, 'I')}`;
+    });
+
     const actualExamId = isHtml ? 'josaa' : examId;
 
     // Ensure unique round_id per exam stream
