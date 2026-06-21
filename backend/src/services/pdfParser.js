@@ -175,8 +175,12 @@ async function parseCutoffPDF(pdfBuffer) {
       if (huMatch) {
         currentBranch.collegeType = huMatch[1].trim();
         currentBranch.homeUniversity = huMatch[2].trim();
-        i++; // skip the next line since we consumed it
+      } else {
+        // If there's no "Home University :" separator, the entire next line is the status / college type
+        currentBranch.collegeType = nextLine;
+        currentBranch.homeUniversity = 'State Level';
       }
+      i++; // skip the next line since we consumed it
       continue;
     }
 

@@ -175,8 +175,8 @@ function AdminPage() {
               >
                 <option value="mhtcet">MHT-CET Engineering (PDF)</option>
                 <option value="pharma">MHT-CET Pharmacy (PDF)</option>
-                <option value="nursing">B.Sc. Nursing (PDF)</option>
-                <option value="agriculture">MHT-CET Agriculture (PDF)</option>
+                <option value="nursing" disabled>B.Sc. Nursing (PDF) [Coming Soon]</option>
+                <option value="agriculture" disabled>MHT-CET Agriculture (PDF) [Coming Soon]</option>
                 <option value="josaa">JoSAA (IIT/NIT) (HTML)</option>
               </select>
             </div>

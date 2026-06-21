@@ -546,6 +546,20 @@ img {
   opacity: 0.7;
 }
 
+.radio-option input[type="radio"]:disabled + label {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--color-border);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.radio-option input[type="radio"]:disabled + label:hover {
+  background: var(--color-bg-input);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;

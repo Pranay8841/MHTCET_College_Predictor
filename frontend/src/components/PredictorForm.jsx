@@ -206,10 +206,11 @@ function PredictorForm() {
                 value="nursing"
                 checked={formData.examId === 'nursing'}
                 onChange={() => handleExamChange('nursing')}
+                disabled
               />
               <label htmlFor="exam-nursing" className="radio-card">
                 <strong>B.Sc. Nursing</strong>
-                <span>Nursing Cutoffs (%ile)</span>
+                <span>Coming Soon</span>
               </label>
             </div>
             <div className="radio-option">
@@ -220,10 +221,11 @@ function PredictorForm() {
                 value="agriculture"
                 checked={formData.examId === 'agriculture'}
                 onChange={() => handleExamChange('agriculture')}
+                disabled
               />
               <label htmlFor="exam-agriculture" className="radio-card">
                 <strong>MHT-CET Agriculture</strong>
-                <span>Agri, Horti &amp; Forestry (%ile)</span>
+                <span>Coming Soon</span>
               </label>
             </div>
           </div>
