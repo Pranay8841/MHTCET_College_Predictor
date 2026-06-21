@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getChanceDisplay } from '../utils/categoryOptions';
 import { fetchCollegeCutoffs } from '../utils/api';
+import { useShortlist } from '../context/ShortlistContext';
 
 /**
  * Sparkline component to draw dynamic SVG line trends for cutoff changes.
@@ -97,6 +98,26 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
 
   const parsedPercentile = queryParams?.percentile ? parseFloat(queryParams.percentile) : null;
   const studentPercentileFormatted = (parsedPercentile !== null && !isNaN(parsedPercentile)) ? parsedPercentile.toFixed(2) : '—';
+
+  const { addToShortlist, removeFromShortlist, isShortlisted } = useShortlist();
+
+  const handleToggleShortlist = (e, prediction) => {
+    e.stopPropagation();
+    const fullPrediction = {
+      ...prediction,
+      collegeCode: prediction.collegeCode || collegeCode,
+      collegeName: prediction.collegeName || college
+    };
+    if (isShortlisted(fullPrediction, queryParams)) {
+      removeFromShortlist(fullPrediction, queryParams);
+      triggerToast("⭐ Removed from shortlist");
+    } else {
+      const added = addToShortlist(fullPrediction, queryParams);
+      if (added) {
+        triggerToast("⭐ Added to shortlist");
+      }
+    }
+  };
 
   const triggerToast = (message) => {
     setToastMessage(message);
@@ -243,6 +264,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                   )}
                   <th>Margin</th>
                   <th>Chance</th>
+                  <th style={{ textAlign: 'center', width: '85px' }}>Shortlist</th>
                 </tr>
               </thead>
               <tbody>
@@ -253,6 +275,8 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                   const diffFormatted = isRankDiff
                     ? (diff >= 0 ? `+${diff}` : `${diff}`)
                     : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
+
+                  const isItemShortlisted = isShortlisted({ ...prediction, collegeCode, collegeName: college }, queryParams);
 
                   return (
                     <tr key={`${prediction.branchCode}-${prediction.category}-${bIdx}`}>
@@ -291,6 +315,24 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                         <span className={`badge badge-sm ${chance.className}`}>
                           {chance.emoji} {prediction.chanceLabel}
                         </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          className={`btn-shortlist-toggle ${isItemShortlisted ? 'shortlisted' : ''}`}
+                          onClick={(e) => handleToggleShortlist(e, prediction)}
+                          title={isItemShortlisted ? "Remove from shortlist" : "Add to shortlist"}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '1.25rem',
+                            padding: 'var(--space-1) var(--space-2)',
+                            color: isItemShortlisted ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                            transition: 'transform var(--transition-fast)'
+                          }}
+                        >
+                          {isItemShortlisted ? '★' : '☆'}
+                        </button>
                       </td>
                     </tr>
                   );
@@ -370,6 +412,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                             )}
                             <th>Margin</th>
                             <th>Chance</th>
+                            <th style={{ textAlign: 'center', width: '85px' }}>Shortlist</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -381,6 +424,8 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                               ? (diff >= 0 ? `+${diff}` : `${diff}`)
                               : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
                             
+                            const isCutoffShortlisted = isShortlisted({ ...cutoff, collegeCode, collegeName: college }, queryParams);
+
                             return (
                               <tr key={`${cutoff.branchCode}-${cIdx}`}>
                                 <td className="branch-cell">
@@ -419,6 +464,24 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                                     {chance.emoji} {cutoff.chanceLabel}
                                   </span>
                                 </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    className={`btn-shortlist-toggle ${isCutoffShortlisted ? 'shortlisted' : ''}`}
+                                    onClick={(e) => handleToggleShortlist(e, cutoff)}
+                                    title={isCutoffShortlisted ? "Remove from shortlist" : "Add to shortlist"}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      fontSize: '1.25rem',
+                                      padding: 'var(--space-1) var(--space-2)',
+                                      color: isCutoffShortlisted ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                                      transition: 'transform var(--transition-fast)'
+                                    }}
+                                  >
+                                    {isCutoffShortlisted ? '★' : '☆'}
+                                  </button>
+                                </td>
                               </tr>
                             );
                           })}
@@ -435,13 +498,33 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                           ? (diff >= 0 ? `+${diff}` : `${diff}`)
                           : (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2));
                         
+                        const isCutoffShortlisted = isShortlisted({ ...cutoff, collegeCode, collegeName: college }, queryParams);
+
                         return (
                           <div key={`${cutoff.branchCode}-${cIdx}`} className="mobile-cutoff-card">
-                            <div className="mobile-cutoff-card-header">
+                            <div className="mobile-cutoff-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span className="mobile-branch-name">{cutoff.branchName}</span>
-                              <span className={`badge badge-sm ${chance.className}`} style={{ marginLeft: 'var(--space-2)' }}>
-                                {chance.emoji} {cutoff.chanceLabel}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <span className={`badge badge-sm ${chance.className}`}>
+                                  {chance.emoji} {cutoff.chanceLabel}
+                                </span>
+                                <button
+                                  className={`btn-shortlist-toggle ${isCutoffShortlisted ? 'shortlisted' : ''}`}
+                                  onClick={(e) => handleToggleShortlist(e, cutoff)}
+                                  title={isCutoffShortlisted ? "Remove from shortlist" : "Add to shortlist"}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '1.25rem',
+                                    padding: '0 var(--space-1)',
+                                    color: isCutoffShortlisted ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                                    transition: 'transform var(--transition-fast)'
+                                  }}
+                                >
+                                  {isCutoffShortlisted ? '★' : '☆'}
+                                </button>
+                              </div>
                             </div>
 
                             {isJosaa && (

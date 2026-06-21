@@ -3,52 +3,61 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import HomePage from './pages/HomePage';
 import ResultsPage from './pages/ResultsPage';
 import AdminPage from './pages/AdminPage';
+import ShortlistPage from './pages/ShortlistPage';
+import { ShortlistProvider } from './context/ShortlistContext';
 
 function App() {
   return (
-    <Router>
-      <div className="app" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        {/* Navigation */}
-        <nav className="navbar">
-          <div className="container">
-            <NavLink to="/" className="navbar-brand">
-              <span className="brand-logo-wrapper">
-                <img 
-                  src="/IMG-20240521-WA0022-removebg-preview.png" 
-                  alt="Navodisha Logo" 
-                  className="brand-logo-img" 
-                />
-              </span>
-              <span>NAVO<span className="brand-accent">DISHA</span></span>
-            </NavLink>
-            <ul className="navbar-nav">
-              <li>
-                <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''} end>
-                  🏠 Home
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/results" className={({ isActive }) => isActive ? 'active' : ''}>
-                  📊 Results
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/admin" className={({ isActive }) => isActive ? 'active' : ''}>
-                  ⚙️ Admin
-                </NavLink>
-              </li>
-            </ul>
-          </div>
-        </nav>
+    <ShortlistProvider>
+      <Router>
+        <div className="app" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+          {/* Navigation */}
+          <nav className="navbar">
+            <div className="container">
+              <NavLink to="/" className="navbar-brand">
+                <span className="brand-logo-wrapper">
+                  <img 
+                    src="/IMG-20240521-WA0022-removebg-preview.png" 
+                    alt="Navodisha Logo" 
+                    className="brand-logo-img" 
+                  />
+                </span>
+                <span>NAVO<span className="brand-accent">DISHA</span></span>
+              </NavLink>
+              <ul className="navbar-nav">
+                <li>
+                  <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''} end>
+                    🏠 Home
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/results" className={({ isActive }) => isActive ? 'active' : ''}>
+                    📊 Results
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/shortlist" className={({ isActive }) => isActive ? 'active' : ''}>
+                    ⭐ Shortlist
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/admin" className={({ isActive }) => isActive ? 'active' : ''}>
+                    ⚙️ Admin
+                  </NavLink>
+                </li>
+              </ul>
+            </div>
+          </nav>
 
-        {/* Main Content */}
-        <main style={{ flex: 1 }}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/results" element={<ResultsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-          </Routes>
-        </main>
+          {/* Main Content */}
+          <main style={{ flex: 1 }}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/results" element={<ResultsPage />} />
+              <Route path="/shortlist" element={<ShortlistPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+            </Routes>
+          </main>
 
         {/* Footer */}
         <footer className="footer">
@@ -61,8 +70,9 @@ function App() {
             </p>
           </div>
         </footer>
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </ShortlistProvider>
   );
 }
 
