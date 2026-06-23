@@ -275,6 +275,40 @@ async function getAllColleges() {
 }
 
 /**
+ * Get unique home university names from colleges table.
+ */
+let universityCache = null;
+
+async function getUniqueUniversities() {
+  if (!supabase) return [];
+
+  if (universityCache) {
+    console.log('⚡ Serving universities from memory cache');
+    return universityCache;
+  }
+
+  console.log('🔍 Fetching unique universities from Supabase...');
+
+  const { data, error } = await supabase
+    .from('colleges')
+    .select('home_university');
+
+  if (error) {
+    console.error('❌ Supabase error fetching universities:', error);
+    return [];
+  }
+
+  const universities = new Set();
+  data.forEach(d => {
+    if (d.home_university) universities.add(d.home_university);
+  });
+
+  const sorted = Array.from(universities).sort();
+  universityCache = sorted;
+  return sorted;
+}
+
+/**
  * Get unique college types.
  */
 async function getCollegeTypes() {
@@ -466,6 +500,7 @@ module.exports = {
   saveJosaaCutoffsToSupabase,
   getUniqueBranches,
   getAllColleges,
+  getUniqueUniversities,
   getCollegeTypes,
   getRoundsMetadata,
   clearBranchCache

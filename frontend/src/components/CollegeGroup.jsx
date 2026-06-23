@@ -163,6 +163,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
   // College info from the first branch
   const collegeCode = branches[0]?.collegeCode || '';
   const collegeType = branches[0]?.collegeType || 'N/A';
+  const homeUniversity = branches[0]?.homeUniversity || '';
 
   return (
     <div
@@ -179,6 +180,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
           <div className="college-group-name">{college}</div>
           <div className="college-group-meta">
             <span className="meta-tag">🏛️ {collegeType}</span>
+            {homeUniversity && <span className="meta-tag">📍 {homeUniversity}</span>}
             <span className="meta-tag">🔢 Code: {collegeCode}</span>
             <span className="meta-tag">📚 {branches.length} Branch{branches.length > 1 ? 'es' : ''}</span>
           </div>

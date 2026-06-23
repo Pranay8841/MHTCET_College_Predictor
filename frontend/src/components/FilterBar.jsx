@@ -6,7 +6,7 @@ import {
   JOSAA_COLLEGE_TYPE_OPTIONS
 } from '../utils/categoryOptions';
 
-function FilterBar({ filters, onFilterChange, branches, isJosaa }) {
+function FilterBar({ filters, onFilterChange, branches, isJosaa, cities }) {
   const handleChange = (field, value) => {
     onFilterChange({ ...filters, [field]: value });
   };
@@ -56,6 +56,22 @@ function FilterBar({ filters, onFilterChange, branches, isJosaa }) {
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+
+        {/* City Filter — hidden for JoSAA */}
+        {!isJosaa && cities && cities.length > 0 && (
+          <select
+            className="form-select"
+            value={filters.cityFilter || 'all'}
+            onChange={e => handleChange('cityFilter', e.target.value)}
+            id="filter-city"
+            style={{ minWidth: '160px' }}
+          >
+            <option value="all">📍 All Cities</option>
+            {cities.map(c => (
+              <option key={c} value={c}>📍 {c}</option>
+            ))}
+          </select>
+        )}
 
         {/* Sort */}
         <select

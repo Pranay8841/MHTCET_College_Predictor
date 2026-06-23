@@ -11,7 +11,8 @@ const { supabase } = require('../supabaseClient');
 const {
   getAllColleges,
   getUniqueBranches,
-  getCollegeTypes
+  getCollegeTypes,
+  getUniqueUniversities
 } = require('../services/supabaseService');
 
 /**
@@ -71,6 +72,20 @@ router.get('/types', async (req, res) => {
     res.json({ types });
   } catch (err) {
     console.error('❌ Error fetching college types:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/colleges/universities
+ * List all unique home university names.
+ */
+router.get('/universities', async (req, res) => {
+  try {
+    const universities = await getUniqueUniversities();
+    res.json({ universities });
+  } catch (err) {
+    console.error('❌ Error fetching universities:', err);
     res.status(500).json({ error: err.message });
   }
 });

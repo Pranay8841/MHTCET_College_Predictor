@@ -5,6 +5,7 @@ import CollegeGroup from '../components/CollegeGroup';
 import StatsBar from '../components/StatsBar';
 import FilterBar from '../components/FilterBar';
 import { CATEGORY_OPTIONS, SEAT_TYPE_OPTIONS } from '../utils/categoryOptions';
+import { extractCityFromCollegeName, getCitiesFromPredictions } from '../utils/regionMapping';
 
 const COLLEGES_PER_PAGE = 10;
 
@@ -18,6 +19,7 @@ function ResultsPage() {
     chance: 'all',
     branchFilter: 'all',
     collegeTypeFilter: 'all',
+    cityFilter: 'all',
     sort: 'chance-desc',
     search: ''
   });
@@ -74,6 +76,11 @@ function ResultsPage() {
     return [...branches].sort();
   }, [allPredictions]);
 
+  // Get unique cities from results (extracted from college names)
+  const uniqueCities = useMemo(() => {
+    return getCitiesFromPredictions(allPredictions);
+  }, [allPredictions]);
+
   // Apply client-side filters + sort
   const filteredPredictions = useMemo(() => {
     let result = [...allPredictions];
@@ -92,6 +99,13 @@ function ResultsPage() {
     if (filters.collegeTypeFilter && filters.collegeTypeFilter !== 'all') {
       result = result.filter(p =>
         p.collegeType?.toLowerCase().includes(filters.collegeTypeFilter.toLowerCase())
+      );
+    }
+
+    // Filter by city
+    if (filters.cityFilter && filters.cityFilter !== 'all') {
+      result = result.filter(p =>
+        extractCityFromCollegeName(p.collegeName) === filters.cityFilter
       );
     }
 
@@ -457,6 +471,7 @@ function ResultsPage() {
             onFilterChange={setFilters}
             branches={uniqueBranches}
             isJosaa={queryParams.isJosaa}
+            cities={uniqueCities}
           />
 
           {/* Results — Grouped by College */}
@@ -485,6 +500,7 @@ function ResultsPage() {
                 chance: 'all',
                 branchFilter: 'all',
                 collegeTypeFilter: 'all',
+                cityFilter: 'all',
                 sort: 'chance-desc',
                 search: ''
               })}>

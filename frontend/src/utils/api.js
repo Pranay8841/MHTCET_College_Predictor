@@ -63,6 +63,11 @@ export const fetchCollegeTypes = async () => {
   return response.data;
 };
 
+export const fetchUniversities = async () => {
+  const response = await api.get('/colleges/universities');
+  return response.data;
+};
+
 export const fetchRounds = async (adminSecret) => {
   const response = await api.get('/admin/rounds', {
     headers: adminSecret ? { 'X-Admin-Secret': adminSecret } : {}
