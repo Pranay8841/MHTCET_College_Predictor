@@ -91,6 +91,29 @@ router.get('/universities', async (req, res) => {
 });
 
 /**
+ * GET /api/colleges/:collegeCode/details
+ * Retrieve or dynamically scrape college details (fees, placement, NIRF).
+ */
+router.get('/:collegeCode/details', async (req, res) => {
+  try {
+    const { collegeCode } = req.params;
+    const { collegeName, collegeType } = req.query;
+
+    if (!collegeName) {
+      return res.status(400).json({ error: 'Missing collegeName query param' });
+    }
+
+    const { getCollegeDetails } = require('../services/collegeScraperService');
+    const details = await getCollegeDetails(collegeCode, collegeName, collegeType);
+
+    res.json(details);
+  } catch (err) {
+    console.error('❌ Error fetching college details:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/colleges/:collegeCode/cutoffs
  * Get all branch cutoffs for a specific college in a given round/profile.
  * Returns both the selected round's cutoffs and structured multi-round comparison data.

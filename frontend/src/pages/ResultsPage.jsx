@@ -4,6 +4,7 @@ import { usePredictions } from '../hooks/usePredictions';
 import CollegeGroup from '../components/CollegeGroup';
 import StatsBar from '../components/StatsBar';
 import FilterBar from '../components/FilterBar';
+import ComparisonModal from '../components/ComparisonModal';
 import { CATEGORY_OPTIONS, SEAT_TYPE_OPTIONS } from '../utils/categoryOptions';
 import { extractCityFromCollegeName, getCitiesFromPredictions } from '../utils/regionMapping';
 
@@ -24,6 +25,29 @@ function ResultsPage() {
     search: ''
   });
   const [allPredictions, setAllPredictions] = useState([]);
+  const [selectedColleges, setSelectedColleges] = useState([]);
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const triggerToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handleToggleCompare = (college) => {
+    setSelectedColleges(prev => {
+      const exists = prev.some(c => c.collegeName === college.collegeName);
+      if (exists) {
+        return prev.filter(c => c.collegeName !== college.collegeName);
+      } else {
+        if (prev.length >= 3) {
+          triggerToast("⚠️ You can compare a maximum of 3 colleges side-by-side!");
+          return prev;
+        }
+        return [...prev, college];
+      }
+    });
+  };
 
   // Extract query params
   const queryParams = useMemo(() => {
@@ -486,6 +510,8 @@ function ResultsPage() {
                   isJosaa={queryParams.isJosaa}
                   isRankSearch={queryParams.isRankSearch}
                   queryParams={queryParams}
+                  isCompared={selectedColleges.some(c => c.collegeName === group.collegeName)}
+                  onToggleCompare={handleToggleCompare}
                 />
               ))}
             </div>
@@ -550,6 +576,69 @@ function ResultsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Floating Comparison Bar */}
+      {selectedColleges.length > 0 && (
+        <div className="floating-compare-bar animate-slide-up">
+          <div className="floating-compare-content">
+            <div className="floating-compare-info">
+              <span className="compare-count-badge">{selectedColleges.length}</span>
+              <span className="compare-text-label">
+                {selectedColleges.length === 1 
+                  ? "College selected. Select at least 2 colleges to compare side-by-side." 
+                  : "Colleges selected for side-by-side comparison."
+                }
+              </span>
+              <div className="compare-pills">
+                {selectedColleges.map(c => (
+                  <div key={c.collegeCode} className="compare-pill">
+                    <span className="compare-pill-name">{c.collegeName.split(',')[0]}</span>
+                    <button 
+                      className="compare-pill-close" 
+                      onClick={() => handleToggleCompare(c)}
+                      aria-label="Remove college"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="floating-compare-actions">
+              <button 
+                className="btn btn-primary btn-compare-now" 
+                disabled={selectedColleges.length < 2}
+                onClick={() => setShowComparisonModal(true)}
+              >
+                ⚖️ Compare Now
+              </button>
+              <button 
+                className="btn btn-secondary btn-compare-clear" 
+                onClick={() => setSelectedColleges([])}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comparison Modal Portal */}
+      <ComparisonModal
+        isOpen={showComparisonModal}
+        onClose={() => setShowComparisonModal(false)}
+        selectedColleges={selectedColleges}
+        isRankSearch={queryParams.isRankSearch}
+        isJosaa={queryParams.isJosaa}
+        queryParams={queryParams}
+      />
+
+      {/* Global Toast for ResultsPage */}
+      {toastMessage && (
+        <div className="toast-notification select-toast animate-fade-in">
+          {toastMessage}
+        </div>
       )}
     </div>
   );

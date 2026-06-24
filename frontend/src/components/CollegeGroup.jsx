@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getChanceDisplay } from '../utils/categoryOptions';
-import { fetchCollegeCutoffs } from '../utils/api';
+import { fetchCollegeCutoffs, fetchCollegeDetails } from '../utils/api';
 import { useShortlist } from '../context/ShortlistContext';
+import { getEnrichedCollegeData } from '../utils/collegeEnrichment';
 
 /**
  * Sparkline component to draw dynamic SVG line trends for cutoff changes.
@@ -86,7 +87,7 @@ function Sparkline({ data, isRank }) {
  * CollegeGroup renders a single college with all its matching branches
  * in a table format, similar to the reference image layout.
  */
-function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryParams }) {
+function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryParams, isCompared, onToggleCompare }) {
   const [expanded, setExpanded] = useState(true);
   const [modalType, setModalType] = useState(null); // 'cutoff', 'comparison', or null
   const [loadingCutoffs, setLoadingCutoffs] = useState(false);
@@ -95,6 +96,29 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
   const [multiRoundData, setMultiRoundData] = useState([]);
   const [modalError, setModalError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [enrichedDetails, setEnrichedDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  const handleOpenEnrichedModal = async (type) => {
+    setModalType(type);
+    if (enrichedDetails) return; // already loaded!
+    
+    setLoadingDetails(true);
+    setModalError('');
+    try {
+      const response = await fetchCollegeDetails(collegeCode, { 
+        collegeName: college, 
+        collegeType 
+      });
+      setEnrichedDetails(response);
+    } catch (err) {
+      console.error('Failed to load college details from scraper:', err);
+      // Fallback to local synchronous heuristics
+      setEnrichedDetails(getEnrichedCollegeData(collegeCode, college, collegeType));
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   const parsedPercentile = queryParams?.percentile ? parseFloat(queryParams.percentile) : null;
   const studentPercentileFormatted = (parsedPercentile !== null && !isNaN(parsedPercentile)) ? parsedPercentile.toFixed(2) : '—';
@@ -176,6 +200,23 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
         onClick={() => setExpanded(!expanded)}
       >
         <div className="college-group-rank">{index + 1}</div>
+        <div className="college-group-compare" onClick={(e) => e.stopPropagation()}>
+          <label className="compare-checkbox-label" title="Select for comparison">
+            <input
+              type="checkbox"
+              checked={isCompared || false}
+              onChange={() => onToggleCompare({
+                collegeCode,
+                collegeName: college,
+                collegeType,
+                homeUniversity,
+                branches
+              })}
+            />
+            <span className="compare-checkbox-custom"></span>
+            <span className="compare-text">Compare</span>
+          </label>
+        </div>
         <div className="college-group-info">
           <div className="college-group-name">{college}</div>
           <div className="college-group-meta">
@@ -201,7 +242,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
           className="btn-action btn-placement"
           onClick={(e) => {
             e.stopPropagation();
-            triggerToast("💼 Placement stats for this college are coming soon!");
+            handleOpenEnrichedModal('placement');
           }}
         >
           💼 <span className="btn-text-desktop">See </span>Placement
@@ -228,7 +269,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
           className="btn-action btn-fees"
           onClick={(e) => {
             e.stopPropagation();
-            triggerToast("🪙 Fees / Seat details for this college are coming soon!");
+            handleOpenEnrichedModal('fees');
           }}
         >
           🪙 <span className="btn-text-desktop">See </span>Fees / Seat
@@ -352,7 +393,12 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">
-                  {college} {modalType === 'comparison' ? '— Round-wise Comparison' : '— Cutoffs'}
+                  {college} {
+                    modalType === 'comparison' ? '— Round-wise Comparison' : 
+                    modalType === 'placement' ? '— Placement Stats' :
+                    modalType === 'fees' ? '— Fees & Details' :
+                    '— Cutoffs'
+                  }
                 </h3>
                 <div className="modal-subtitle">
                   <span>🏛️ {collegeType}</span>
@@ -363,7 +409,92 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
             </div>
 
             <div className="modal-body">
-              {loadingCutoffs ? (
+              {modalType === 'placement' || modalType === 'fees' ? (
+                loadingDetails ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12)' }}>
+                    <div className="animate-spin" style={{ fontSize: '2.5rem', marginBottom: 'var(--space-3)' }}>⏳</div>
+                    <div style={{ color: 'var(--color-text-secondary)' }}>Searching web for latest details...</div>
+                  </div>
+                ) : enrichedDetails ? (
+                  (() => {
+                    const enriched = enrichedDetails;
+                    if (modalType === 'placement') {
+                      return (
+                        <div className="enriched-details-modal">
+                          <div className="enriched-stat-card-grid">
+                            <div className="enriched-stat-card">
+                              <span className="stat-label">Average Package</span>
+                              <span className="stat-value highlight-avg">{enriched.averagePackage || 'N/A'}</span>
+                            </div>
+                            <div className="enriched-stat-card">
+                              <span className="stat-label">Highest Package</span>
+                              <span className="stat-value highlight-highest">{enriched.highestPackage || 'N/A'}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="enriched-recruiters-section">
+                            <h4 className="section-title">Top Recruiters</h4>
+                            <div className="recruiters-tags">
+                              {enriched.topRecruiters?.map((r, ri) => (
+                                <span key={ri} className="recruiter-tag">{r}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {enriched.isEstimated && (
+                            <div className="estimated-notice">
+                              💡 Placements stats are estimated based on college type, affiliation, and historical placement records for this tier of institutions.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="enriched-details-modal">
+                          <div className="enriched-stat-card-grid">
+                            <div className="enriched-stat-card">
+                              <span className="stat-label">Total Tuition Fees (Approx.)</span>
+                              <span className="stat-value highlight-fees">{enriched.totalFees || 'N/A'}</span>
+                            </div>
+                            <div className="enriched-stat-card">
+                              <span className="stat-label">College Type</span>
+                              <span className="stat-value">{collegeType}</span>
+                            </div>
+                          </div>
+
+                          <div className="enriched-details-list">
+                            <div className="enriched-detail-row">
+                              <span className="detail-label">📍 Affiliating University</span>
+                              <span className="detail-value">{homeUniversity || 'State Level'}</span>
+                            </div>
+                            <div className="enriched-detail-row">
+                              <span className="detail-label">🔢 DTE College Code</span>
+                              <span className="detail-value">{collegeCode}</span>
+                            </div>
+                            <div className="enriched-detail-row">
+                              <span className="detail-label">🛡️ Autonomy Status</span>
+                              <span className="detail-value">
+                                {collegeType.toLowerCase().includes('autonomous') ? 'Autonomous Institute' : 'Affiliated Institute'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {enriched.isEstimated && (
+                            <div className="estimated-notice">
+                              💡 Fees shown are general estimates for OPEN category students. Under government schemes (EBC, TFWS, SC/ST, OBC), fees are significantly lower. Please refer to official CET Cell / college brochures for fee details.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                  })()
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-state-icon">❌</div>
+                    <h4 style={{ color: 'var(--color-text-primary)' }}>No details found</h4>
+                  </div>
+                )
+              ) : loadingCutoffs ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12)' }}>
                   <div className="animate-spin" style={{ fontSize: '2.5rem', marginBottom: 'var(--space-3)' }}>⏳</div>
                   <div style={{ color: 'var(--color-text-secondary)' }}>Loading branch cutoffs...</div>
