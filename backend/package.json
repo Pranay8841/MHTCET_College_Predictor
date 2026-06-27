@@ -9,6 +9,7 @@
     "test:parser": "node src/test/testParser.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.108.2",
     "cloudinary": "^2.0.1",
     "cors": "^2.8.5",
