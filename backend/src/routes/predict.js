@@ -31,6 +31,7 @@ router.get('/', async (req, res) => {
       category,
       gender,
       seatType, // Maps to Quota (e.g. 'AI', 'HS') for JoSAA
+      homeUniversity,
       roundId,
       branch,
       collegeType,
@@ -40,9 +41,10 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     // Validation
-    if (!category || !gender || !seatType || !roundId) {
+    const isJosaa = examId === 'josaa';
+    if (!category || !gender || !roundId || (isJosaa && !seatType) || (!isJosaa && !homeUniversity && !seatType)) {
       return res.status(400).json({
-        error: 'Missing required parameters: category, gender, seatType, roundId'
+        error: `Missing required parameters: category, gender, roundId${isJosaa ? ', seatType' : ', homeUniversity'}`
       });
     }
 
@@ -52,7 +54,6 @@ router.get('/', async (req, res) => {
 
     let pct = null;
     let studentRank = null;
-    const isJosaa = examId === 'josaa';
     const isRankSearch = isJosaa || (rank !== undefined && rank !== null && rank !== '');
 
     if (isRankSearch) {
@@ -85,7 +86,15 @@ router.get('/', async (req, res) => {
       });
     } else {
       // MHT-CET format
-      categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
+      if (homeUniversity) {
+        // Query S, H, and O suffixes combined
+        const sCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'S');
+        const hCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'H');
+        const oCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'O');
+        categoryCodes = Array.from(new Set([...sCodes, ...hCodes, ...oCodes]));
+      } else {
+        categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
+      }
     }
 
     // 1. Build the base Supabase query
@@ -104,55 +113,99 @@ router.get('/', async (req, res) => {
       branches!inner(branch_code, branch_name)
     `;
 
-    let query = supabase
-      .from('cutoffs')
-      .select(selectString)
-      .eq('exam_id', examId)
-      .eq('round_id', roundId)
-      .in('category_code', categoryCodes);
+    let dbRows = [];
+    let pageOffset = 0;
+    const PAGE_SIZE = 1000;
+    let hasMore = true;
 
-    if (isRankSearch) {
-      if (isJosaa) {
-        // For JoSAA, query where closing rank (stage2_merit_no) is >= 85% of student rank (15% better)
-        query = query
-          .gte('stage2_merit_no', Math.floor(studentRank * 0.85))
-          .not('stage2_merit_no', 'is', null);
+    while (hasMore) {
+      let pageQuery = supabase
+        .from('cutoffs')
+        .select(selectString)
+        .eq('exam_id', examId)
+        .eq('round_id', roundId)
+        .in('category_code', categoryCodes);
+
+      if (isRankSearch) {
+        if (isJosaa) {
+          pageQuery = pageQuery
+            .gte('stage2_merit_no', Math.floor(studentRank * 0.85))
+            .not('stage2_merit_no', 'is', null);
+        } else {
+          pageQuery = pageQuery
+            .gte('stage1_merit_no', Math.floor(studentRank * 0.85))
+            .not('stage1_merit_no', 'is', null);
+        }
       } else {
-        // For MHT-CET Rank search, query where merit rank (stage1_merit_no) is >= 85% of student rank (15% better)
-        query = query
-          .gte('stage1_merit_no', Math.floor(studentRank * 0.85))
-          .not('stage1_merit_no', 'is', null);
+        pageQuery = pageQuery
+          .lte('stage1_percentile', pct + 2.0)
+          .not('stage1_percentile', 'is', null);
       }
-    } else {
-      // For MHT-CET, query where cutoff percentile is <= student's percentile + 2.0
-      query = query
-        .lte('stage1_percentile', pct + 2.0)
-        .not('stage1_percentile', 'is', null);
-    }
 
-    // Filter by branch name in SQL if specified
-    if (branch && branch !== 'all') {
-      query = query.eq('branches.branch_name', branch);
-    }
+      if (branch && branch !== 'all') {
+        pageQuery = pageQuery.eq('branches.branch_name', branch);
+      }
+      if (collegeType && collegeType !== 'all') {
+        pageQuery = pageQuery.ilike('colleges.college_type', `%${collegeType}%`);
+      }
 
-    // Filter by college type in SQL if specified
-    if (collegeType && collegeType !== 'all') {
-      query = query.ilike('colleges.college_type', `%${collegeType}%`);
-    }
+      const { data: pageRows, error: dbError } = await pageQuery
+        .range(pageOffset, pageOffset + PAGE_SIZE - 1);
 
-    const { data: dbRows, error: dbError } = await query;
+      if (dbError) {
+        throw dbError;
+      }
 
-    if (dbError) {
-      throw dbError;
+      dbRows = dbRows.concat(pageRows);
+      if (pageRows.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        pageOffset += PAGE_SIZE;
+      }
     }
 
     const predictions = [];
 
     // 2. Map results and calculate admission chances
     dbRows.forEach(row => {
-      // Filter seat blocks by seat type
-      const blockMatchesSeatType = matchesSeatType(row.seat_block_type, seatType, examId);
-      if (!blockMatchesSeatType) return;
+      // Filter seat blocks dynamically
+      let blockMatches = false;
+
+      if (isJosaa) {
+        blockMatches = row.seat_block_type.toUpperCase() === seatType.toUpperCase();
+      } else if (homeUniversity) {
+        const blockType = row.seat_block_type;
+        const collegeHU = row.colleges.home_university;
+
+        const isOMS = homeUniversity.toLowerCase().includes('outside maharashtra') || 
+                      homeUniversity.toLowerCase().includes('oms') || 
+                      homeUniversity.toLowerCase().includes('other');
+
+        const isGovernmentOrAided = !row.colleges.college_type || 
+          !row.colleges.college_type.toLowerCase().includes('un-aided');
+
+        if (blockType === 'State Level' || blockType === 'All India Seats') {
+          if (isOMS) {
+            blockMatches = false;
+          } else {
+            blockMatches = true;
+          }
+        } else if (isOMS) {
+          blockMatches = false;
+        } else {
+          const isMatch = isHomeUniversityMatch(collegeHU, homeUniversity);
+          if (isMatch) {
+            blockMatches = blockType === 'Home University Seats Allotted to Home University Candidates';
+          } else {
+            blockMatches = blockType === 'Home University Seats Allotted to Other Than Home University Candidates' ||
+                           blockType === 'Other Than Home University Seats Allotted to Other Than Home University Candidates';
+          }
+        }
+      } else {
+        blockMatches = matchesSeatType(row.seat_block_type, seatType, examId);
+      }
+
+      if (!blockMatches) return;
 
       let chance = 0;
       let margin = 0;
@@ -235,6 +288,29 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Helper to normalize and match Home University names to handle spelling differences.
+ */
+function isHomeUniversityMatch(univA, univB) {
+  if (!univA || !univB) return false;
+  
+  const normalize = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .replace(/university/g, '')
+      .replace(/univ/g, '')
+      .replace(/institutes/g, '')
+      .replace(/institute/g, '')
+      .trim();
+  };
+
+  const normA = normalize(univA);
+  const normB = normalize(univB);
+
+  return normA.includes(normB) || normB.includes(normA);
+}
 
 /**
  * Check if a seat block type matches the requested seat type.

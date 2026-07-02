@@ -10,11 +10,11 @@
 // All valid caste/category values
 const CATEGORIES = [
   'OPEN', 'SC', 'ST', 'VJ', 'NT1', 'NT2', 'NT3',
-  'OBC', 'SEBC', 'EWS', 'PWD', 'DEF', 'TFW', 'ORPHAN'
+  'OBC', 'SEBC', 'EWS', 'PWD', 'DEF', 'TFW', 'ORPHAN', 'MI'
 ];
 
 // Special categories that don't follow the G/L gender prefix pattern
-const SPECIAL_CATEGORIES = ['TFW', 'EWS', 'ORPHAN', 'PWD', 'DEF'];
+const SPECIAL_CATEGORIES = ['TFW', 'EWS', 'ORPHAN', 'PWD', 'DEF', 'MI'];
 
 /**
  * Decode a category code into its components.
@@ -81,6 +81,11 @@ function decodeCategory(code) {
  */
 function buildCategoryCodes(gender, category, seatType) {
   const codes = new Set();
+
+  if (category === 'MI') {
+    codes.add('MI');
+    return [...codes];
+  }
 
   // Handle special categories
   if (['TFW', 'ORPHAN'].includes(category)) {

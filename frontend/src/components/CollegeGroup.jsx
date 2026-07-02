@@ -33,6 +33,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
         category: queryParams?.category,
         gender: queryParams?.gender,
         seatType: queryParams?.seatType,
+        homeUniversity: queryParams?.homeUniversity,
         percentile: queryParams?.percentile,
         rank: queryParams?.rank
       };
@@ -74,6 +75,9 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
           <div className="college-group-meta">
             <span className="meta-tag">🏛️ {collegeType}</span>
             <span className="meta-tag">🔢 Code: {collegeCode}</span>
+            {branches[0]?.homeUniversity && (
+              <span className="meta-tag">📍 {branches[0].homeUniversity}</span>
+            )}
             <span className="meta-tag">📚 {branches.length} Branch{branches.length > 1 ? 'es' : ''}</span>
           </div>
         </div>
@@ -126,7 +130,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
               <thead>
                 <tr>
                   <th>Branch</th>
-                  {isJosaa && <th>Quota</th>}
+                  <th>Seat Pool</th>
                   {isRankSearch ? (
                     isJosaa ? (
                       <>
@@ -165,11 +169,17 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                       <td className="branch-cell">
                         <span className="branch-name">{prediction.branchName}</span>
                       </td>
-                      {isJosaa && (
-                        <td>
-                          <span className="meta-tag small">{prediction.seatBlockType}</span>
-                        </td>
-                      )}
+                      <td>
+                        <span className="meta-tag small">
+                          {isJosaa 
+                            ? prediction.seatBlockType 
+                            : prediction.seatBlockType.includes('State') || prediction.seatBlockType.includes('All India')
+                              ? '🌐 State Level'
+                              : prediction.seatBlockType.includes('Other')
+                                ? '🔄 Other University'
+                                : '🏠 Home University'}
+                        </span>
+                      </td>
                       {isRankSearch ? (
                         isJosaa ? (
                           <>
@@ -251,7 +261,7 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                       <thead>
                         <tr>
                           <th>Branch</th>
-                          {isJosaa && <th>Quota</th>}
+                          <th>Seat Pool</th>
                           {isRankSearch ? (
                             isJosaa ? (
                               <>
@@ -290,11 +300,17 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                               <td className="branch-cell">
                                 <span className="branch-name">{cutoff.branchName}</span>
                               </td>
-                              {isJosaa && (
-                                <td>
-                                  <span className="meta-tag small">{cutoff.seatBlockType}</span>
-                                </td>
-                              )}
+                              <td>
+                                <span className="meta-tag small">
+                                  {isJosaa 
+                                    ? cutoff.seatBlockType 
+                                    : cutoff.seatBlockType.includes('State') || cutoff.seatBlockType.includes('All India')
+                                      ? '🌐 State Level'
+                                      : cutoff.seatBlockType.includes('Other')
+                                        ? '🔄 Other University'
+                                        : '🏠 Home University'}
+                                </span>
+                              </td>
                               {isRankSearch ? (
                                 isJosaa ? (
                                   <>
@@ -349,11 +365,17 @@ function CollegeGroup({ college, branches, index, isJosaa, isRankSearch, queryPa
                             </span>
                           </div>
 
-                          {isJosaa && (
-                            <div style={{ marginBottom: 'var(--space-2)' }}>
-                              <span className="meta-tag small">{cutoff.seatBlockType}</span>
-                            </div>
-                          )}
+                           <div style={{ marginBottom: 'var(--space-2)' }}>
+                             <span className="meta-tag small">
+                               {isJosaa 
+                                 ? cutoff.seatBlockType 
+                                 : cutoff.seatBlockType.includes('State') || cutoff.seatBlockType.includes('All India')
+                                   ? '🌐 State Level'
+                                   : cutoff.seatBlockType.includes('Other')
+                                     ? '🔄 Other University'
+                                     : '🏠 Home University'}
+                             </span>
+                           </div>
 
                           <div className="mobile-cutoff-grid">
                             <div className="mobile-cutoff-grid-item">

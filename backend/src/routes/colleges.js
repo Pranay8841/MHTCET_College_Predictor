@@ -88,19 +88,20 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
       category,
       gender,
       seatType,
+      homeUniversity,
       percentile,
       rank
     } = req.query;
 
-    if (!roundId || !category || !gender || !seatType) {
-      return res.status(400).json({ error: 'Missing roundId, category, gender, or seatType' });
+    const isJosaa = examId === 'josaa';
+    if (!roundId || !category || !gender || (isJosaa && !seatType) || (!isJosaa && !homeUniversity && !seatType)) {
+      return res.status(400).json({ error: `Missing roundId, category, gender, or ${isJosaa ? 'seatType' : 'homeUniversity'}` });
     }
 
     if (!supabase) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const isJosaa = examId === 'josaa';
     
     // Parse student score/rank parameters for calculations
     let pct = null;
@@ -121,7 +122,15 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
       });
     } else {
       const { buildCategoryCodes } = require('../utils/categoryDecoder');
-      categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
+      if (homeUniversity) {
+        // Query S, H, and O suffixes combined
+        const sCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'S');
+        const hCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'H');
+        const oCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), 'O');
+        categoryCodes = Array.from(new Set([...sCodes, ...hCodes, ...oCodes]));
+      } else {
+        categoryCodes = buildCategoryCodes(gender.toUpperCase(), category.toUpperCase(), seatType.toUpperCase());
+      }
     }
 
     const { data: dbRows, error: dbError } = await supabase
@@ -133,7 +142,8 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
         stage2_percentile,
         seat_block_type,
         category_code,
-        branches!inner(branch_code, branch_name)
+        branches!inner(branch_code, branch_name),
+        colleges!inner(home_university, college_type)
       `)
       .eq('college_code', collegeCode)
       .eq('exam_id', examId)
@@ -143,6 +153,23 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
     if (dbError) throw dbError;
 
     // Helper functions for chance and match calculations
+    const isHomeUniversityMatch = (univA, univB) => {
+      if (!univA || !univB) return false;
+      const normalize = (name) => {
+        return name
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '')
+          .replace(/university/g, '')
+          .replace(/univ/g, '')
+          .replace(/institutes/g, '')
+          .replace(/institute/g, '')
+          .trim();
+      };
+      const normA = normalize(univA);
+      const normB = normalize(univB);
+      return normA.includes(normB) || normB.includes(normA);
+    };
+
     const matchesSeatType = (seatBlockType, sType, eId) => {
       if (eId === 'josaa') return seatBlockType.toUpperCase() === sType.toUpperCase();
       const lower = seatBlockType.toLowerCase();
@@ -177,7 +204,44 @@ router.get('/:collegeCode/cutoffs', async (req, res) => {
 
     const cutoffs = [];
     dbRows.forEach(row => {
-      if (!matchesSeatType(row.seat_block_type, seatType, examId)) return;
+      // Filter seat blocks dynamically
+      let blockMatches = false;
+
+      if (isJosaa) {
+        blockMatches = row.seat_block_type.toUpperCase() === seatType.toUpperCase();
+      } else if (homeUniversity) {
+        const blockType = row.seat_block_type;
+        const collegeHU = row.colleges.home_university;
+
+        const isOMS = homeUniversity.toLowerCase().includes('outside maharashtra') || 
+                      homeUniversity.toLowerCase().includes('oms') || 
+                      homeUniversity.toLowerCase().includes('other');
+
+        const isGovernmentOrAided = !row.colleges.college_type || 
+          !row.colleges.college_type.toLowerCase().includes('un-aided');
+
+        if (blockType === 'State Level' || blockType === 'All India Seats') {
+          if (isOMS) {
+            blockMatches = false;
+          } else {
+            blockMatches = true;
+          }
+        } else if (isOMS) {
+          blockMatches = false;
+        } else {
+          const isMatch = isHomeUniversityMatch(collegeHU, homeUniversity);
+          if (isMatch) {
+            blockMatches = blockType === 'Home University Seats Allotted to Home University Candidates';
+          } else {
+            blockMatches = blockType === 'Home University Seats Allotted to Other Than Home University Candidates' ||
+                           blockType === 'Other Than Home University Seats Allotted to Other Than Home University Candidates';
+          }
+        }
+      } else {
+        blockMatches = matchesSeatType(row.seat_block_type, seatType, examId);
+      }
+
+      if (!blockMatches) return;
 
       let chance = 0;
       let margin = 0;

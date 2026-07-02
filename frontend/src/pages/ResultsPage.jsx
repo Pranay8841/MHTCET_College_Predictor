@@ -37,6 +37,7 @@ function ResultsPage() {
       category: searchParams.get('category'),
       gender: searchParams.get('gender'),
       seatType: searchParams.get('seatType'),
+      homeUniversity: searchParams.get('homeUniversity'),
       roundId: searchParams.get('roundId'),
       branch: searchParams.getAll('branch'),
       collegeType: searchParams.get('collegeType') || 'all',
@@ -203,9 +204,13 @@ function ResultsPage() {
       doc.text(docTitle, 14, 15);
       doc.setFontSize(10);
       
+      const seatOrUnivText = queryParams.isJosaa
+        ? `Quota: ${queryParams.seatType}`
+        : `Home University: ${queryParams.homeUniversity || 'N/A'}`;
+
       const subInfo = queryParams.isRankSearch
-        ? `${queryParams.isJosaa ? 'JEE' : 'State Merit'} Rank: ${queryParams.rank} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? (queryParams.isJosaa ? 'Female-Only' : 'Female') : (queryParams.isJosaa ? 'Gender-Neutral' : 'Male')} | ${queryParams.isJosaa ? 'Quota' : 'Seat'}: ${queryParams.seatType}`
-        : `Percentile: ${queryParams.percentile} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? 'Female' : 'Male'} | Seat: ${queryParams.seatType}`;
+        ? `${queryParams.isJosaa ? 'JEE' : 'State Merit'} Rank: ${queryParams.rank} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? (queryParams.isJosaa ? 'Female-Only' : 'Female') : (queryParams.isJosaa ? 'Gender-Neutral' : 'Male')} | ${seatOrUnivText}`
+        : `Percentile: ${queryParams.percentile} | Category: ${queryParams.category} | Gender: ${queryParams.gender === 'L' ? 'Female' : 'Male'} | ${seatOrUnivText}`;
       
       doc.text(subInfo, 14, 22);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
@@ -217,10 +222,10 @@ function ResultsPage() {
         if (queryParams.isJosaa) {
           headers = [['Code', 'Branch', 'Type', 'Quota', 'Category', 'Opening Rank', 'Closing Rank', 'Your Rank', 'Margin', 'Chance']];
         } else {
-          headers = [['Code', 'Branch', 'Type', 'Category', 'Cutoff Rank', 'Your Rank', 'Margin', 'Cutoff %ile', 'Chance']];
+          headers = [['Code', 'Branch', 'Type', 'Seat Pool', 'Category', 'Cutoff Rank', 'Your Rank', 'Margin', 'Cutoff %ile', 'Chance']];
         }
       } else {
-        headers = [['Code', 'Branch', 'Type', 'Category', 'Cutoff %ile', 'Your %ile', 'Margin', 'Chance']];
+        headers = [['Code', 'Branch', 'Type', 'Seat Pool', 'Category', 'Cutoff %ile', 'Your %ile', 'Margin', 'Chance']];
       }
 
       const totalCols = headers[0].length;
@@ -261,6 +266,11 @@ function ResultsPage() {
                 p.collegeCode,
                 p.branchName,
                 p.collegeType || 'N/A',
+                p.seatBlockType.includes('State') || p.seatBlockType.includes('All India')
+                  ? 'State Level'
+                  : p.seatBlockType.includes('Other')
+                    ? 'Other University'
+                    : 'Home University',
                 p.category,
                 p.cutoffMeritNo || 'N/A',
                 p.studentRank || 'N/A',
@@ -274,6 +284,11 @@ function ResultsPage() {
               p.collegeCode,
               p.branchName,
               p.collegeType || 'N/A',
+              p.seatBlockType.includes('State') || p.seatBlockType.includes('All India')
+                ? 'State Level'
+                : p.seatBlockType.includes('Other')
+                  ? 'Other University'
+                  : 'Home University',
               p.category,
               p.cutoffPercentile?.toFixed(2) || 'N/A',
               p.studentPercentile?.toFixed(2) || 'N/A',
@@ -292,13 +307,9 @@ function ResultsPage() {
         body: tableData,
         styles: { fontSize: 7, cellPadding: 2 },
         headStyles: { fillColor: [255, 107, 43] },
-        columnStyles: queryParams.isJosaa ? {
+        columnStyles: {
           0: { cellWidth: 15 },
-          1: { cellWidth: 90 },
-          9: { cellWidth: 15 }
-        } : {
-          0: { cellWidth: 15 },
-          1: { cellWidth: 95 },
+          1: { cellWidth: 85 },
           [headers[0].length - 1]: { cellWidth: 18 }
         },
         didParseCell: function (data) {
@@ -353,7 +364,7 @@ function ResultsPage() {
     : (CATEGORY_OPTIONS.find(c => c.value === queryParams.category)?.label || queryParams.category);
   const seatLabel = queryParams.isJosaa
     ? queryParams.seatType
-    : (SEAT_TYPE_OPTIONS.find(s => s.value === queryParams.seatType)?.label || queryParams.seatType);
+    : (queryParams.homeUniversity || 'N/A');
 
   return (
     <div className="container" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}>
@@ -383,7 +394,7 @@ function ResultsPage() {
           {queryParams.isRankSearch ? (
             <>
               {queryParams.isJosaa ? 'JEE' : 'State Merit'} Rank: <strong>{queryParams.rank}</strong> | 
-              {queryParams.isJosaa ? 'Quota' : 'Seat'}: <strong>{seatLabel}</strong> | 
+              <strong>{queryParams.isJosaa ? 'Quota: ' : 'Home University: '}</strong>{seatLabel} | 
               Category: <strong>{categoryLabel}</strong> | 
               Gender/Pool: <strong>{queryParams.gender === 'L' ? (queryParams.isJosaa ? 'Female-Only' : 'Female') : (queryParams.isJosaa ? 'Gender-Neutral' : 'Male')}</strong>
             </>
@@ -392,11 +403,36 @@ function ResultsPage() {
               Percentile: <strong>{queryParams.percentile}</strong> | 
               Category: <strong>{categoryLabel}</strong> | 
               Gender: <strong>{queryParams.gender === 'L' ? 'Female' : 'Male'}</strong> | 
-              Seat: <strong>{seatLabel}</strong>
+              <strong>{queryParams.isJosaa ? 'Quota: ' : 'Home University: '}</strong>{seatLabel}
             </>
           )}
         </p>
       </div>
+
+      {/* OMS Disclaimer Banner */}
+      {!loading && !error && queryParams.homeUniversity?.toLowerCase().includes('outside maharashtra') && (
+        <div style={{
+          backgroundColor: 'rgba(255, 107, 43, 0.08)',
+          border: '1px dashed var(--color-primary)',
+          borderRadius: 'var(--border-radius-md)',
+          padding: 'var(--space-4) var(--space-6)',
+          marginBottom: 'var(--space-6)',
+          display: 'flex',
+          gap: 'var(--space-4)',
+          alignItems: 'flex-start',
+          animation: 'fadeInUp 0.4s ease 0.1s both'
+        }}>
+          <div style={{ fontSize: 'var(--text-xl)' }}>⚠️</div>
+          <div>
+            <h4 style={{ margin: 0, fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-primary)', marginBottom: 'var(--space-1)' }}>
+              Outside Maharashtra State (OMS) Candidate Notice
+            </h4>
+            <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+              OMS candidates are classified under the All India Candidature and compete for a designated <strong>All India Quota (15%)</strong> in private unaided colleges, or via institutional quotas. These are evaluated using <strong>JEE Main scores</strong> rather than MHT-CET percentiles. Home state/State-Level domicile quotas (GOPENS, GOBCS, etc.) are strictly reserved for Maharashtra residents, and OMS candidates are ineligible for seats in Government or Government-Aided colleges.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Loading State */}
       {loading && (

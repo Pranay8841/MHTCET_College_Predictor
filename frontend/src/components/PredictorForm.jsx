@@ -6,6 +6,7 @@ import {
   CATEGORY_OPTIONS,
   GENDER_OPTIONS,
   SEAT_TYPE_OPTIONS,
+  MAHARASHTRA_UNIVERSITIES,
   COLLEGE_TYPE_OPTIONS,
   JOSAA_CATEGORY_OPTIONS,
   JOSAA_SEAT_TYPE_OPTIONS
@@ -20,6 +21,7 @@ function PredictorForm() {
     category: 'OPEN',
     gender: 'G',
     seatType: 'S',
+    homeUniversity: 'Mumbai University',
     roundId: '',
     branch: [],
     collegeType: 'all'
@@ -47,6 +49,7 @@ function PredictorForm() {
       category: 'OPEN',
       gender: 'G',
       seatType: newExamId === 'josaa' ? 'AI' : 'S',
+      homeUniversity: 'Mumbai University',
       roundId: '',
       branch: [],
       collegeType: 'all'
@@ -99,10 +102,15 @@ function PredictorForm() {
       examId: formData.examId,
       category: formData.category,
       gender: formData.gender,
-      seatType: formData.seatType,
       roundId: formData.roundId,
       collegeType: formData.collegeType
     });
+
+    if (formData.examId === 'josaa') {
+      params.set('seatType', formData.seatType);
+    } else {
+      params.set('homeUniversity', formData.homeUniversity);
+    }
 
     if (formData.examId === 'josaa' || predictBy === 'rank') {
       params.set('rank', formData.rank);
@@ -379,28 +387,47 @@ function PredictorForm() {
           </select>
         </div>
 
-        {/* Seat Type / Quota */}
+        {/* Seat Type / Quota or Home University */}
         <div className="form-group">
-          <label className="form-label" htmlFor="seatType">
-            {formData.examId === 'josaa' ? 'Quota *' : 'Seat Type *'}
-          </label>
-          <select
-            id="seatType"
-            className="form-select"
-            value={formData.seatType}
-            onChange={e => handleChange('seatType', e.target.value)}
-          >
-            {seatTypeOptionsList.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            {formData.examId === 'josaa'
-              ? 'AI: All India (default for IITs), HS/OS: NITs Quota system'
-              : SEAT_TYPE_OPTIONS.find(s => s.value === formData.seatType)?.description}
-          </span>
+          {formData.examId === 'josaa' ? (
+            <>
+              <label className="form-label" htmlFor="seatType">Quota *</label>
+              <select
+                id="seatType"
+                className="form-select"
+                value={formData.seatType}
+                onChange={e => handleChange('seatType', e.target.value)}
+              >
+                {JOSAA_SEAT_TYPE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                AI: All India (default for IITs), HS/OS: NITs Quota system
+              </span>
+            </>
+          ) : (
+            <>
+              <label className="form-label" htmlFor="homeUniversity">Home University *</label>
+              <select
+                id="homeUniversity"
+                className="form-select"
+                value={formData.homeUniversity}
+                onChange={e => handleChange('homeUniversity', e.target.value)}
+              >
+                {MAHARASHTRA_UNIVERSITIES.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                Select the university region where you completed your HSC (12th) exam.
+              </span>
+            </>
+          )}
         </div>
 
         {/* College Type */}

@@ -16,7 +16,8 @@ export const CATEGORY_OPTIONS = [
   { value: 'PWD', label: 'PWD — Person With Disability' },
   { value: 'DEF', label: 'DEF — Defence' },
   { value: 'TFW', label: 'TFW — Tuition Fee Waiver' },
-  { value: 'ORPHAN', label: 'ORPHAN — Orphan Quota' }
+  { value: 'ORPHAN', label: 'ORPHAN — Orphan Quota' },
+  { value: 'MI', label: 'MI — Minority Quota' }
 ];
 
 export const GENDER_OPTIONS = [
@@ -28,6 +29,20 @@ export const SEAT_TYPE_OPTIONS = [
   { value: 'S', label: 'State Level', description: 'Open to all Maharashtra students' },
   { value: 'H', label: 'Home University', description: 'Seats reserved for home university students' },
   { value: 'O', label: 'Other than Home University', description: 'Seats for students from other universities' }
+];
+
+export const MAHARASHTRA_UNIVERSITIES = [
+  { value: 'Mumbai University', label: 'Mumbai University (MU)' },
+  { value: 'Savitribai Phule Pune University', label: 'Savitribai Phule Pune University (SPPU)' },
+  { value: 'Shivaji University', label: 'Shivaji University (SU)' },
+  { value: 'Rashtrasant Tukadoji Maharaj Nagpur University', label: 'Rashtrasant Tukadoji Maharaj Nagpur University (RTMNU)' },
+  { value: 'Sant Gadge Baba Amravati University', label: 'Sant Gadge Baba Amravati University (SGBAU)' },
+  { value: 'Dr. Babasaheb Ambedkar Marathwada University', label: 'Dr. Babasaheb Ambedkar Marathwada University (BAMU)' },
+  { value: 'Swami Ramanand Teerth Marathwada University, Nanded', label: 'Swami Ramanand Teerth Marathwada University, Nanded (SRTMUN)' },
+  { value: 'Kavayitri Bahinabai Chaudhari North Maharashtra University, Jalgaon', label: 'Kavayitri Bahinabai Chaudhari North Maharashtra University, Jalgaon (KBCNMU)' },
+  { value: 'Punyashlok Ahilyadevi Holkar Solapur University', label: 'Punyashlok Ahilyadevi Holkar Solapur University (PAHSU)' },
+  { value: 'Gondwana University', label: 'Gondwana University (GU)' },
+  { value: 'Outside Maharashtra State (OMS)', label: 'Outside Maharashtra State (OMS) / Other' }
 ];
 
 export const COLLEGE_TYPE_OPTIONS = [
